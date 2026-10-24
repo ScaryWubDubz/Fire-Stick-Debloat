@@ -51,7 +51,8 @@ UPDATES=(
 
 # Never touched, whatever you answer: removing these can soft-brick the stick.
 PROTECTED="com.amazon.tv.launcher com.amazon.venezia com.amazon.tv.settings com.amazon.tv.settings.v2 \
-com.amazon.vizzini com.amazon.tcomm com.amazon.whisperplay com.amazon.device.sync com.android.systemui"
+com.amazon.vizzini com.amazon.tcomm com.amazon.whisperplay com.amazon.device.sync com.android.systemui \
+com.spocky.projengmenu com.esaba.downloader"
 
 adb_sh() { adb -s "$IP:5555" shell "$@" 2>&1 | tr -d '\r'; }
 
@@ -94,6 +95,8 @@ done
 echo; echo "== Apps you installed: answer y to REMOVE =="
 for pkg in $(adb_sh pm list packages -3 | sed 's/^package://' | sort); do
   is_protected "$pkg" && continue
+  # Amazon's own background services aren't offered; only apps you'd recognise.
+  [[ "$pkg" == com.amazon.* && "$pkg" != com.amazon.firetv.youtube ]] && continue
   ask "Remove $pkg?" && disable_pkg "$pkg"
 done
 

@@ -1,0 +1,4 @@
+# Keep the Windows files byte-for-byte (CRLF) in the repo and in Download ZIP.
+*.bat -text
+*.ps1 -text
+*.sh text eol=lf
