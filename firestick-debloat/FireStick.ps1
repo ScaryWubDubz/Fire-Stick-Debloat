@@ -290,6 +290,10 @@ function Install-FromComputer {
     }
     if ($r -match 'Success') {
         Write-Host 'Installed! It is now in Your Apps & Channels on the Fire Stick.' -ForegroundColor Green
+    } elseif ($r -match 'INSTALL_FAILED_OLDER_SDK') {
+        $sdk = (Invoke-Shell 'getprop ro.build.version.sdk').Trim()
+        Write-Host "That version needs a newer Android than your Fire Stick has (SDK $sdk)." -ForegroundColor Yellow
+        Write-Host "On APKMirror, download a variant whose 'Minimum version' is Android 6.0 or similar, not 12L+." -ForegroundColor Yellow
     } else {
         Write-Host "The install didn't work. Here's what the Fire Stick said:" -ForegroundColor Red
         Write-Host $r
