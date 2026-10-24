@@ -207,6 +207,39 @@ function Start-Undo {
     Restart-Prompt
 }
 
+# Projectivy takes over the Home button through an accessibility service.
+# Fire OS often has no on-screen switch for it, so turn it on over ADB.
+function Enable-Projectivy {
+    $pkg = 'com.spocky.projengmenu'
+    if ((Get-Installed) -notcontains $pkg) {
+        Write-Host 'Projectivy Launcher is not installed yet. Install it on the Fire Stick, open it once, then try again.' -ForegroundColor Yellow
+        return
+    }
+    $dump = Invoke-Shell "dumpsys package $pkg"
+    $svc = $null
+    if ($dump -match 'android\.accessibilityservice\.AccessibilityService:\s*\n\s*\S+\s+(com\.spocky\.projengmenu/\S+)') { $svc = $Matches[1] }
+    elseif ($dump -match '(com\.spocky\.projengmenu/\S*[Aa]ccessib\S*)') { $svc = $Matches[1] }
+    if (-not $svc) {
+        Write-Host "Couldn't find Projectivy's Home button service. Use 'Override current launcher' in Projectivy's own settings instead." -ForegroundColor Yellow
+        return
+    }
+    $current = (Invoke-Shell 'settings get secure enabled_accessibility_services').Trim()
+    if ($current -like "*$svc*") {
+        Write-Host 'Projectivy already controls the Home button.' -ForegroundColor Green
+        return
+    }
+    # Keep any accessibility services that were already on.
+    if ($current -and $current -ne 'null') { $new = "${current}:$svc" } else { $new = $svc }
+    Invoke-Shell "settings put secure enabled_accessibility_services $new" | Out-Null
+    Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
+    if ((Invoke-Shell 'settings get secure enabled_accessibility_services') -like "*$svc*") {
+        Write-Host 'Done! Press Home on your remote: you should land on Projectivy.' -ForegroundColor Green
+        Write-Host '(If a Fire OS update ever brings back the Amazon home screen, just run option 4 again.)'
+    } else {
+        Write-Host "Fire OS didn't accept the change. Use 'Override current launcher' in Projectivy's own settings instead." -ForegroundColor Yellow
+    }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -235,12 +268,14 @@ while ($true) {
     Write-Host '  1  Preview (shows what would happen, changes nothing)'
     Write-Host '  2  Clean up my Fire Stick'
     Write-Host '  3  Undo everything'
+    Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
     Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type 1, 2, 3 or Q').Trim().ToUpper()) {
+    switch ((Read-Host 'Type 1, 2, 3, 4 or Q').Trim().ToUpper()) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
+        '4' { Enable-Projectivy }
         'Q' { return }
-        default { Write-Host 'Please type 1, 2, 3 or Q.' -ForegroundColor Yellow }
+        default { Write-Host 'Please type 1, 2, 3, 4 or Q.' -ForegroundColor Yellow }
     }
 }
