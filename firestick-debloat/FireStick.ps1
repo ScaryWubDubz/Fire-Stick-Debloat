@@ -314,21 +314,49 @@ $PegasusKeys = [ordered]@{
     'keys.next-page' = @('E,D,GamepadR1', 'Media Fast Forward')
 }
 
-# Pegasus creates its settings folder the first time it opens; depending on the
-# build it is in one of these two places.
+# Every folder named pegasus-frontend on the stick. Pegasus creates its settings
+# folder there the first time it opens; where exactly depends on the build.
+function Find-PegasusDirs {
+    @((Invoke-Shell 'find /sdcard/ -maxdepth 6 -type d -name pegasus-frontend 2>/dev/null') -split "`n" |
+        ForEach-Object { $_.Trim().TrimEnd('/') } | Where-Object { $_ -like '/*' })
+}
+
 function Get-PegasusDir {
     if ((Get-Installed) -notcontains $PegasusPkg) {
         Write-Host 'Pegasus is not installed yet. Install it with option 5 first.' -ForegroundColor Yellow
         return $null
     }
-    $candidates = @("/sdcard/Android/data/$PegasusPkg/files/pegasus-frontend", '/sdcard/pegasus-frontend')
-    $existing = @($candidates | Where-Object { (Invoke-Shell "[ -d $_ ] && echo yes") -match 'yes' })
-    foreach ($d in $existing) {
+    $dirs = @(Find-PegasusDirs)
+    if ($dirs.Count -eq 0) {
+        # Usually means Pegasus couldn't create its folder because it was never
+        # given storage permission. Grant it and restart Pegasus.
+        Write-Host 'Giving Pegasus permission to use storage and restarting it...'
+        foreach ($perm in 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE') {
+            Invoke-Shell "pm grant $PegasusPkg android.permission.$perm" | Out-Null
+        }
+        Invoke-Shell "appops set $PegasusPkg MANAGE_EXTERNAL_STORAGE allow" | Out-Null
+        Invoke-Shell "am force-stop $PegasusPkg" | Out-Null
+        $r = Invoke-Shell "monkey -p $PegasusPkg -c android.intent.category.LAUNCHER 1"
+        if ($r -match 'No activities') { Invoke-Shell "monkey -p $PegasusPkg -c android.intent.category.LEANBACK_LAUNCHER 1" | Out-Null }
+        Start-Sleep -Seconds 8
+        $dirs = @(Find-PegasusDirs)
+    }
+    if ($dirs.Count -eq 0) {
+        Write-Host "Couldn't find Pegasus's settings folder on the Fire Stick." -ForegroundColor Red
+        Write-Host 'Copy everything below and send it to Claude:' -ForegroundColor Yellow
+        Write-Host '---'
+        Write-Host (Invoke-Shell "dumpsys package $PegasusPkg | grep -E 'versionName|targetSdk|STORAGE'")
+        Write-Host (Invoke-Shell "ls -la /sdcard/Android/data/$PegasusPkg/ /sdcard/Android/data/$PegasusPkg/files/ 2>&1")
+        Write-Host (Invoke-Shell 'ls /sdcard/ 2>&1')
+        Write-Host '---'
+        return $null
+    }
+    foreach ($d in $dirs) {
         if ((Invoke-Shell "[ -f $d/settings.txt ] && echo yes") -match 'yes') { return $d }
     }
-    if ($existing.Count -gt 0) { return $existing[0] }
-    Write-Host 'Open Pegasus once on the TV so it can set itself up, then try again.' -ForegroundColor Yellow
-    return $null
+    $own = @($dirs | Where-Object { $_ -like "*/Android/data/$PegasusPkg/*" })
+    if ($own.Count -gt 0) { return $own[0] }
+    return $dirs[0]
 }
 
 function Set-SettingLine($Lines, [string]$Key, [string]$Value) {
