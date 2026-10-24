@@ -300,6 +300,166 @@ function Install-FromComputer {
     }
 }
 
+# --- Pegasus themes ---
+$PegasusPkg = 'org.pegasus_frontend.android'
+
+# Remote buttons Pegasus ignores out of the box. Each entry is the key's default
+# binding plus the Fire TV remote button added to it: Menu opens Pegasus's main
+# menu, Back goes back, Play/Pause shows details, Rewind/Fast-forward change page.
+$PegasusKeys = [ordered]@{
+    'keys.menu'      = @('F1,GamepadStart', 'Menu')
+    'keys.cancel'    = @('Esc,Backspace,GamepadB', 'Back')
+    'keys.details'   = @('I,GamepadX', 'Toggle Media Play/Pause')
+    'keys.prev-page' = @('Q,A,GamepadL1', 'Media Rewind')
+    'keys.next-page' = @('E,D,GamepadR1', 'Media Fast Forward')
+}
+
+# Pegasus creates its settings folder the first time it opens; depending on the
+# build it is in one of these two places.
+function Get-PegasusDir {
+    if ((Get-Installed) -notcontains $PegasusPkg) {
+        Write-Host 'Pegasus is not installed yet. Install it with option 5 first.' -ForegroundColor Yellow
+        return $null
+    }
+    $candidates = @("/sdcard/Android/data/$PegasusPkg/files/pegasus-frontend", '/sdcard/pegasus-frontend')
+    $existing = @($candidates | Where-Object { (Invoke-Shell "[ -d $_ ] && echo yes") -match 'yes' })
+    foreach ($d in $existing) {
+        if ((Invoke-Shell "[ -f $d/settings.txt ] && echo yes") -match 'yes') { return $d }
+    }
+    if ($existing.Count -gt 0) { return $existing[0] }
+    Write-Host 'Open Pegasus once on the TV so it can set itself up, then try again.' -ForegroundColor Yellow
+    return $null
+}
+
+function Set-SettingLine($Lines, [string]$Key, [string]$Value) {
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i] -match "^$([regex]::Escape($Key))\s*:") { $Lines[$i] = "${Key}: $Value"; return }
+    }
+    $Lines.Add("${Key}: $Value")
+}
+
+# Writes the theme (and the remote buttons) into Pegasus's settings.txt,
+# keeping every other setting as it was.
+function Set-PegasusTheme([string]$Dir, [string]$ThemeValue) {
+    # Pegasus rewrites settings.txt when it closes, so stop it first.
+    Invoke-Shell "am force-stop $PegasusPkg" | Out-Null
+    $lines = New-Object System.Collections.Generic.List[string]
+    foreach ($l in ((Invoke-Shell "cat $Dir/settings.txt 2>/dev/null") -split "`n")) {
+        if ($l.Trim()) { $lines.Add($l.TrimEnd()) }
+    }
+    Set-SettingLine $lines 'general.theme' $ThemeValue
+    foreach ($key in $PegasusKeys.Keys) {
+        $current = $PegasusKeys[$key][0]
+        foreach ($l in $lines) {
+            if ($l -match "^$([regex]::Escape($key))\s*:\s*(.*)$") { $current = $Matches[1].Trim() }
+        }
+        $tokens = @($current -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        if ($tokens -notcontains $PegasusKeys[$key][1]) { $tokens += $PegasusKeys[$key][1] }
+        Set-SettingLine $lines $key ($tokens -join ',')
+    }
+    $tmp = Join-Path $env:TEMP 'pegasus-settings.txt'
+    # No byte-order mark: Pegasus would read it as part of the first setting's name.
+    [IO.File]::WriteAllText($tmp, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
+    $r = Invoke-Adb @('-s', $script:Target, 'push', $tmp, "$Dir/settings.txt")
+    Remove-Item $tmp -ErrorAction SilentlyContinue
+    return ($r -match 'pushed')
+}
+
+# Copies a theme you downloaded (the .zip, or the folder you extracted) to the
+# Fire Stick and switches Pegasus to it.
+function Install-PegasusTheme {
+    $dir = Get-PegasusDir
+    if (-not $dir) { return }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $roots = @($PSScriptRoot, (Join-Path $env:USERPROFILE 'Downloads')) | Where-Object { Test-Path $_ }
+    $found = @()
+    foreach ($z in (Get-ChildItem -Path $roots -Filter *.zip -File -ErrorAction SilentlyContinue)) {
+        try {
+            $zip = [IO.Compression.ZipFile]::OpenRead($z.FullName)
+            $isTheme = @($zip.Entries | Where-Object { $_.Name -eq 'theme.cfg' }).Count -gt 0
+            $zip.Dispose()
+            if ($isTheme) { $found += $z }
+        } catch { }
+    }
+    foreach ($cfg in (Get-ChildItem -Path $roots -Filter theme.cfg -File -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
+        $found += $cfg.Directory
+    }
+    $found = @($found | Sort-Object FullName -Unique | Sort-Object LastWriteTime -Descending | Select-Object -First 9)
+    if ($found.Count -eq 0) {
+        Write-Host 'No Pegasus themes found in your Downloads folder. Download a theme .zip first.' -ForegroundColor Yellow
+        return
+    }
+    Write-Host ''
+    Write-Host 'Themes found (newest first):'
+    for ($i = 0; $i -lt $found.Count; $i++) { Write-Host "  $($i + 1)  $($found[$i].Name)" }
+    $pick = (Read-Host 'Type the number to install (or just press Enter for 1)').Trim()
+    if (-not $pick) { $pick = '1' }
+    if ($pick -notmatch '^[1-9]$' -or [int]$pick -gt $found.Count) { Write-Host 'Not a valid number.' -ForegroundColor Yellow; return }
+    $item = $found[[int]$pick - 1]
+
+    $tmp = $null
+    if ($item -is [IO.FileInfo]) {
+        $tmp = Join-Path $env:TEMP ('pegasus-theme-' + [guid]::NewGuid())
+        try { [IO.Compression.ZipFile]::ExtractToDirectory($item.FullName, $tmp) }
+        catch {
+            Write-Host "Couldn't open that zip file. Try downloading it again." -ForegroundColor Yellow
+            Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        $searchRoot = $tmp
+        $fallbackName = $item.BaseName
+    } else {
+        $searchRoot = $item.FullName
+        $fallbackName = $item.Name
+    }
+    # The theme is the folder holding theme.cfg; take the shallowest one.
+    $cfgFile = Get-ChildItem -Path $searchRoot -Filter theme.cfg -File -Recurse |
+        Sort-Object { $_.FullName.Length } | Select-Object -First 1
+    $themeDir = $cfgFile.Directory.FullName
+    if ($themeDir -eq $tmp) { $name = $fallbackName } else { $name = $cfgFile.Directory.Name }
+    # GitHub zips are named like gameOS-master; keep it short and shell-safe.
+    $name = ($name -replace '-(master|main)$', '') -replace '[^A-Za-z0-9._-]', '_'
+    if (-not $name) { $name = 'theme' }
+
+    Write-Host "Copying '$name' to the Fire Stick... (can take a minute)"
+    Invoke-Shell "mkdir -p $dir/themes" | Out-Null
+    Invoke-Shell "rm -rf $dir/themes/$name" | Out-Null
+    $r = Invoke-Adb @('-s', $script:Target, 'push', $themeDir, "$dir/themes/$name")
+    if ($tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+    if ($r -notmatch 'pushed') {
+        Write-Host "Copying didn't work. Here's what the Fire Stick said:" -ForegroundColor Red
+        Write-Host $r
+        return
+    }
+    if (Set-PegasusTheme $dir "themes/$name/") {
+        Write-Host "Installed and switched to '$name'. Open Pegasus to see it." -ForegroundColor Green
+        Write-Host 'Remote: Menu button = Pegasus menu, Back = back, Play/Pause = details, Rewind/Fast-forward = change page.'
+    } else {
+        Write-Host "The theme was copied, but switching to it didn't work. Pick it in Pegasus: Menu button > Settings > Theme." -ForegroundColor Yellow
+    }
+}
+
+function Switch-PegasusTheme {
+    $dir = Get-PegasusDir
+    if (-not $dir) { return }
+    $themes = @((Invoke-Shell "ls -1 $dir/themes 2>/dev/null") -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    Write-Host ''
+    Write-Host 'Pegasus themes on your Fire Stick:'
+    Write-Host '  0  Pegasus default (grid)'
+    for ($i = 0; $i -lt $themes.Count; $i++) { Write-Host "  $($i + 1)  $($themes[$i])" }
+    $pick = (Read-Host 'Type the number of the theme to use').Trim()
+    if ($pick -eq '0') {
+        $value = ':/themes/pegasus-theme-grid/'; $label = 'the default theme'
+    } elseif ($pick -match '^\d+$' -and [int]$pick -ge 1 -and [int]$pick -le $themes.Count) {
+        $label = $themes[[int]$pick - 1]; $value = "themes/$label/"
+    } else {
+        Write-Host 'Not a valid number.' -ForegroundColor Yellow
+        return
+    }
+    if (Set-PegasusTheme $dir $value) { Write-Host "Switched to $label. Open Pegasus to see it." -ForegroundColor Green }
+    else { Write-Host "Couldn't save the setting on the Fire Stick." -ForegroundColor Red }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -330,14 +490,18 @@ while ($true) {
     Write-Host '  3  Undo everything'
     Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
     Write-Host '  5  Install an app file from this computer (.apk)'
+    Write-Host '  6  Install a Pegasus theme from this computer'
+    Write-Host '  7  Switch Pegasus theme'
     Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type 1, 2, 3, 4, 5 or Q').Trim().ToUpper()) {
+    switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
         '4' { Enable-Projectivy }
         '5' { Install-FromComputer }
+        '6' { Install-PegasusTheme }
+        '7' { Switch-PegasusTheme }
         'Q' { return }
-        default { Write-Host 'Please type 1, 2, 3, 4, 5 or Q.' -ForegroundColor Yellow }
+        default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
     }
 }

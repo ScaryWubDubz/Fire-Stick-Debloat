@@ -62,6 +62,23 @@ Even with the ads gone, the Amazon home screen is busy. Projectivy shows just a 
 
 Result: you boot to one dark wallpaper and a single row of the apps you use. No banners or autoplay trailers.
 
+## 6. Themed menus with Pegasus (Windows tool)
+
+Pegasus Frontend is a menu app built for retro gaming. It also lists all your installed apps, and themes completely change its look (Apple TV style, console style, scrolling lists).
+
+1. Download Pegasus from github.com/mmatyas/pegasus-frontend/releases. Get the file ending in `_android.apk` (not `android64`). Install it with tool option **5**, then open Pegasus once on the TV.
+2. Download a theme as a .zip. On a theme's GitHub page, that's **Code → Download ZIP**. Good starting points are `PlayingKarrde/gameOS` (Apple TV style) and `RBertoCases/skylineOS` (Switch style).
+3. Tool option **6** copies the theme over and switches Pegasus to it. Option **7** switches between installed themes, or back to the default.
+
+The tool also maps the Fire TV remote for Pegasus:
+
+| Remote button | Does |
+|---|---|
+| ☰ Menu | Pegasus menu |
+| Back | Back |
+| Play/Pause | Details |
+| Rewind / Fast-forward | Previous / next page |
+
 ## Troubleshooting
 
 - **"failed … wouldn't allow it":** newer Fire OS protects some system apps. That's harmless. The script skips them.
