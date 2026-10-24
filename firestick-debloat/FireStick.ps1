@@ -56,6 +56,8 @@ $Names = @{
     'tv.pluto.android'                  = 'Pluto TV'
     'com.tubitv'                        = 'Tubi'
     'org.xbmc.kodi'                     = 'Kodi'
+    'com.spocky.projengmenu'            = 'Projectivy Launcher'
+    'org.pegasus_frontend.android'      = 'Pegasus'
 }
 
 function Get-Name([string]$Pkg) {
@@ -300,124 +302,33 @@ function Install-FromComputer {
     }
 }
 
-# --- Pegasus themes ---
-# Fire OS won't let the computer into Pegasus's own settings folder, but Pegasus
-# also loads themes from this shared folder, which the computer can write to.
-$PegasusPkg = 'org.pegasus_frontend.android'
-$PegasusThemes = '/sdcard/pegasus-frontend/themes'
-
-function Test-Pegasus {
-    if ((Get-Installed) -contains $PegasusPkg) { return $true }
-    Write-Host 'Pegasus is not installed yet. Install it with option 5 first.' -ForegroundColor Yellow
-    return $false
+# Folders some apps leave behind in shared storage after they're uninstalled.
+$Leftovers = @{
+    'org.pegasus_frontend.android' = '/sdcard/pegasus-frontend'
 }
 
-# Opens Pegasus on the TV, then presses F1 (a key the remote doesn't have) to
-# bring up Pegasus's main menu.
-function Open-PegasusMenu([bool]$Restart) {
-    if ($Restart) { Invoke-Shell "am force-stop $PegasusPkg" | Out-Null }
-    $r = Invoke-Shell "monkey -p $PegasusPkg -c android.intent.category.LAUNCHER 1"
-    if ($r -match 'No activities') { Invoke-Shell "monkey -p $PegasusPkg -c android.intent.category.LEANBACK_LAUNCHER 1" | Out-Null }
-    Start-Sleep -Seconds 6
-    Invoke-Shell 'input keyevent KEYCODE_F1' | Out-Null
-}
-
-function Show-PegasusMenuHelp {
+# Fully uninstalls an app you installed yourself (not Amazon's built-in ones;
+# those are handled by "Clean up" and "Undo").
+function Uninstall-App {
+    $apps = @(Get-YourApps)
+    if ($apps.Count -eq 0) { Write-Host 'No apps you installed were found.' -ForegroundColor Yellow; return }
     Write-Host ''
-    Write-Host "Pegasus's menu should now be open on the TV. With the remote:" -ForegroundColor Cyan
-    Write-Host '  - Pick a theme:   Settings > Theme'
-    Write-Host '  - One-time setup so the remote works fully: Settings > Change controls...'
-    Write-Host '      set "Main menu" to the remote Menu button, and "Cancel" (back) to the remote Back button'
-    Write-Host "  (If the menu isn't showing, choose option 7 to open it again.)"
-}
-
-# Copies a theme you downloaded (the .zip, or the folder you extracted) to the
-# Fire Stick.
-function Install-PegasusTheme {
-    if (-not (Test-Pegasus)) { return }
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $roots = @($PSScriptRoot, (Join-Path $env:USERPROFILE 'Downloads')) | Where-Object { Test-Path $_ }
-    $found = @()
-    foreach ($z in (Get-ChildItem -Path $roots -Filter *.zip -File -ErrorAction SilentlyContinue)) {
-        try {
-            $zip = [IO.Compression.ZipFile]::OpenRead($z.FullName)
-            $isTheme = @($zip.Entries | Where-Object { $_.Name -eq 'theme.cfg' }).Count -gt 0
-            $zip.Dispose()
-            if ($isTheme) { $found += $z }
-        } catch { }
-    }
-    foreach ($cfg in (Get-ChildItem -Path $roots -Filter theme.cfg -File -Recurse -Depth 3 -ErrorAction SilentlyContinue)) {
-        $found += $cfg.Directory
-    }
-    $found = @($found | Sort-Object FullName -Unique | Sort-Object LastWriteTime -Descending | Select-Object -First 9)
-    if ($found.Count -eq 0) {
-        Write-Host 'No Pegasus themes found in your Downloads folder. Download a theme .zip first.' -ForegroundColor Yellow
-        return
-    }
-    Write-Host ''
-    Write-Host 'Themes found (newest first):'
-    for ($i = 0; $i -lt $found.Count; $i++) { Write-Host "  $($i + 1)  $($found[$i].Name)" }
-    $pick = (Read-Host 'Type the number to install (or just press Enter for 1)').Trim()
-    if (-not $pick) { $pick = '1' }
-    if ($pick -notmatch '^[1-9]$' -or [int]$pick -gt $found.Count) { Write-Host 'Not a valid number.' -ForegroundColor Yellow; return }
-    $item = $found[[int]$pick - 1]
-
-    $tmp = $null
-    if ($item -is [IO.FileInfo]) {
-        $tmp = Join-Path $env:TEMP ('pegasus-theme-' + [guid]::NewGuid())
-        try { [IO.Compression.ZipFile]::ExtractToDirectory($item.FullName, $tmp) }
-        catch {
-            Write-Host "Couldn't open that zip file. Try downloading it again." -ForegroundColor Yellow
-            Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
-            return
+    Write-Host 'Apps you installed:'
+    for ($i = 0; $i -lt $apps.Count; $i++) { Write-Host "  $($i + 1)  $(Get-Name $apps[$i])" }
+    $pick = (Read-Host 'Type the number of the app to uninstall (or just Enter to cancel)').Trim()
+    if (-not $pick) { return }
+    if ($pick -notmatch '^\d+$' -or [int]$pick -lt 1 -or [int]$pick -gt $apps.Count) { Write-Host 'Not a valid number.' -ForegroundColor Yellow; return }
+    $pkg = $apps[[int]$pick - 1]
+    if (-not (Ask "Uninstall $(Get-Name $pkg) completely?")) { return }
+    if ((Invoke-Shell "pm uninstall $pkg") -match 'Success') {
+        Write-Host "  uninstalled  $(Get-Name $pkg)" -ForegroundColor Green
+        if ($Leftovers.ContainsKey($pkg)) {
+            Invoke-Shell "rm -rf $($Leftovers[$pkg])" | Out-Null
+            Write-Host "  removed its leftover files" -ForegroundColor Green
         }
-        $searchRoot = $tmp
-        $fallbackName = $item.BaseName
     } else {
-        $searchRoot = $item.FullName
-        $fallbackName = $item.Name
+        Write-Host "Couldn't uninstall $(Get-Name $pkg)." -ForegroundColor Red
     }
-    # The theme is the folder holding theme.cfg; take the shallowest one.
-    $cfgFile = Get-ChildItem -Path $searchRoot -Filter theme.cfg -File -Recurse |
-        Sort-Object { $_.FullName.Length } | Select-Object -First 1
-    $themeDir = $cfgFile.Directory.FullName
-    if ($themeDir -eq $tmp) { $name = $fallbackName } else { $name = $cfgFile.Directory.Name }
-    # GitHub zips are named like gameOS-master; keep it short and shell-safe.
-    $name = ($name -replace '-(master|main)$', '') -replace '[^A-Za-z0-9._-]', '_'
-    if (-not $name) { $name = 'theme' }
-
-    # Pegasus needs "all files" access to read themes from shared storage.
-    Invoke-Shell "appops set $PegasusPkg MANAGE_EXTERNAL_STORAGE allow" | Out-Null
-
-    Write-Host "Copying '$name' to the Fire Stick... (can take a minute)"
-    Invoke-Shell "mkdir -p $PegasusThemes" | Out-Null
-    Invoke-Shell "rm -rf $PegasusThemes/$name" | Out-Null
-    $r = Invoke-Adb @('-s', $script:Target, 'push', $themeDir, "$PegasusThemes/$name")
-    if ($tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
-    if ($r -notmatch 'pushed') {
-        Write-Host "Copying didn't work. Here's what the Fire Stick said:" -ForegroundColor Red
-        Write-Host $r
-        return
-    }
-    Write-Host "Copied '$name'. Restarting Pegasus so it sees the new theme..." -ForegroundColor Green
-    # Pegasus only looks for theme folders when it starts.
-    Open-PegasusMenu $true
-    Show-PegasusMenuHelp
-    Write-Host "  Your new theme is called: $name" -ForegroundColor Green
-}
-
-function Show-PegasusThemes {
-    if (-not (Test-Pegasus)) { return }
-    $themes = @((Invoke-Shell "ls -1 $PegasusThemes 2>/dev/null") -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    Write-Host ''
-    if ($themes.Count -gt 0) {
-        Write-Host 'Themes installed on your Fire Stick:'
-        foreach ($t in $themes) { Write-Host "  $t" }
-    } else {
-        Write-Host 'No extra themes installed yet (option 6 adds one).'
-    }
-    Open-PegasusMenu $false
-    Show-PegasusMenuHelp
 }
 
 function Restart-Prompt {
@@ -450,8 +361,7 @@ while ($true) {
     Write-Host '  3  Undo everything'
     Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
     Write-Host '  5  Install an app file from this computer (.apk)'
-    Write-Host '  6  Install a Pegasus theme from this computer'
-    Write-Host '  7  Open Pegasus menu (switch theme, change controls)'
+    Write-Host '  6  Uninstall an app I installed'
     Write-Host '  Q  Quit'
     switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
         '1' { Show-Preview }
@@ -459,8 +369,7 @@ while ($true) {
         '3' { Start-Undo }
         '4' { Enable-Projectivy }
         '5' { Install-FromComputer }
-        '6' { Install-PegasusTheme }
-        '7' { Show-PegasusThemes }
+        '6' { Uninstall-App }
         'Q' { return }
         default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
     }
