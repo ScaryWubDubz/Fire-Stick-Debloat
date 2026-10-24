@@ -68,16 +68,10 @@ Pegasus Frontend is a menu app built for retro gaming. It also lists all your in
 
 1. Download Pegasus from github.com/mmatyas/pegasus-frontend/releases. Get the file ending in `_android.apk` (not `android64`). Install it with tool option **5**, then open Pegasus once on the TV.
 2. Download a theme as a .zip. On a theme's GitHub page, that's **Code → Download ZIP**. Good starting points are `PlayingKarrde/gameOS` (Apple TV style) and `RBertoCases/skylineOS` (Switch style).
-3. Tool option **6** copies the theme over and switches Pegasus to it. Option **7** switches between installed themes, or back to the default.
+3. Tool option **6** copies the theme to the stick, restarts Pegasus and opens its menu. On the TV, go to **Settings → Theme** and pick it.
+4. Option **7** opens Pegasus's menu anytime, so you can switch themes. The Fire TV remote has no button that does this until you set one up.
 
-The tool also maps the Fire TV remote for Pegasus:
-
-| Remote button | Does |
-|---|---|
-| ☰ Menu | Pegasus menu |
-| Back | Back |
-| Play/Pause | Details |
-| Rewind / Fast-forward | Previous / next page |
+One-time remote setup, inside Pegasus: **Settings → Change controls...** Set **Main menu** to the remote's ☰ button and **Cancel** to the Back button. After that you won't need the computer to switch themes.
 
 ## Troubleshooting
 
