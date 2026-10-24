@@ -240,6 +240,62 @@ function Enable-Projectivy {
     }
 }
 
+# Installs an app file you downloaded on this computer (.apk, or a bundle such
+# as .apkm/.apks/.xapk) straight onto the Fire Stick. No Downloader app needed.
+function Install-FromComputer {
+    $folders = @($PSScriptRoot, (Join-Path $env:USERPROFILE 'Downloads')) | Where-Object { Test-Path $_ }
+    $files = @(Get-ChildItem -Path $folders -File -ErrorAction SilentlyContinue |
+        Where-Object { $_.Extension -in '.apk', '.apkm', '.apks', '.xapk' } |
+        Sort-Object FullName -Unique | Sort-Object LastWriteTime -Descending | Select-Object -First 9)
+    if ($files.Count -eq 0) {
+        Write-Host 'No app files (.apk or .apkm) found in your Downloads folder. Download one first.' -ForegroundColor Yellow
+        return
+    }
+    Write-Host ''
+    Write-Host 'App files found (newest first):'
+    for ($i = 0; $i -lt $files.Count; $i++) { Write-Host "  $($i + 1)  $($files[$i].Name)" }
+    $pick = (Read-Host 'Type the number to install (or just press Enter for 1)').Trim()
+    if (-not $pick) { $pick = '1' }
+    if ($pick -notmatch '^[1-9]$' -or [int]$pick -gt $files.Count) { Write-Host 'Not a valid number.' -ForegroundColor Yellow; return }
+    $file = $files[[int]$pick - 1]
+
+    Write-Host "Sending $($file.Name) to the Fire Stick... (can take a minute)"
+    if ($file.Extension -eq '.apk') {
+        $r = Invoke-Adb @('-s', $script:Target, 'install', '-r', $file.FullName)
+    } else {
+        # A bundle is a zip of several .apk parts. Send the main part plus only
+        # the processor-specific parts this Fire Stick can actually run.
+        $tmp = Join-Path $env:TEMP ('firestick-' + [guid]::NewGuid())
+        try {
+            New-Item -ItemType Directory -Path $tmp | Out-Null
+            $zip = Join-Path $tmp 'bundle.zip'
+            Copy-Item $file.FullName $zip
+            Expand-Archive -Path $zip -DestinationPath (Join-Path $tmp 'x') -ErrorAction Stop
+        } catch {
+            Write-Host "Couldn't open that file. Download the plain APK version instead." -ForegroundColor Yellow
+            Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        $abis = (Invoke-Shell 'getprop ro.product.cpu.abilist').Trim().Replace('-', '_') -split ','
+        $parts = @(Get-ChildItem (Join-Path $tmp 'x') -Filter *.apk -Recurse | Where-Object {
+            if ($_.Name -match 'config\.(arm64_v8a|armeabi_v7a|armeabi|x86_64|x86)\.apk$') { $abis -contains $Matches[1] } else { $true }
+        } | ForEach-Object { $_.FullName })
+        if ($parts.Count -eq 0) {
+            Write-Host "That file doesn't contain an app. Download the plain APK version instead." -ForegroundColor Yellow
+            Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+            return
+        }
+        $r = Invoke-Adb (@('-s', $script:Target, 'install-multiple', '-r') + $parts)
+        Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($r -match 'Success') {
+        Write-Host 'Installed! It is now in Your Apps & Channels on the Fire Stick.' -ForegroundColor Green
+    } else {
+        Write-Host "The install didn't work. Here's what the Fire Stick said:" -ForegroundColor Red
+        Write-Host $r
+    }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -269,13 +325,15 @@ while ($true) {
     Write-Host '  2  Clean up my Fire Stick'
     Write-Host '  3  Undo everything'
     Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
+    Write-Host '  5  Install an app file from this computer (.apk)'
     Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type 1, 2, 3, 4 or Q').Trim().ToUpper()) {
+    switch ((Read-Host 'Type 1, 2, 3, 4, 5 or Q').Trim().ToUpper()) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
         '4' { Enable-Projectivy }
+        '5' { Install-FromComputer }
         'Q' { return }
-        default { Write-Host 'Please type 1, 2, 3, 4 or Q.' -ForegroundColor Yellow }
+        default { Write-Host 'Please type 1, 2, 3, 4, 5 or Q.' -ForegroundColor Yellow }
     }
 }
