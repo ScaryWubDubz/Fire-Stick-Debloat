@@ -22,7 +22,7 @@ Takes about 20 minutes. You need a computer on the same Wi-Fi as the Fire Stick.
 ## 3. Install ADB on your computer
 
 - **Mac:** `brew install android-platform-tools`
-- **Windows:** download "SDK Platform-Tools for Windows" from developer.android.com, then right-click the zip and choose **Extract All**. That's all you need. Skip step 4 and use the Windows steps below.
+- **Windows:** nothing to install. The tool offers to download Google's platform-tools for you the first time it runs. Skip step 4 and use the Windows steps below.
 - **Linux:** `sudo apt install adb`
 
 ## 4. Run the debloater
@@ -42,10 +42,10 @@ Restart afterwards: `adb -s 192.168.1.50:5555 reboot`
 
 ### Windows: the double-click version
 
-1. Save `Start-Here.bat` and `FireStick.ps1` in the same folder. Your Downloads folder works, or the `platform-tools` folder.
+1. Save `Start-Here.bat` and `FireStick.ps1` in the same folder. Your Downloads folder works.
 2. Double-click **Start-Here.bat**. If Windows says "Windows protected your PC", click **More info → Run anyway**.
 3. Type your Fire Stick's IP address. On first connection, the TV shows a popup: tick **Always allow** and select **OK**.
-4. Choose **1** to preview, **2** to clean up, or **3** to undo everything.
+4. Choose **1** to preview, **2** to clean up, or **3** to undo everything. Option **7** walks you through downloading and installing Projectivy, and **4** makes it your home screen.
 
 ## 5. The clean look: Projectivy Launcher (optional, recommended)
 

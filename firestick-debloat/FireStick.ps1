@@ -85,6 +85,33 @@ function Find-Adb {
     return $null
 }
 
+# Google's license doesn't allow shipping adb with this tool, so fetch the
+# official copy into this folder the first time it's needed.
+function Get-PlatformTools {
+    Write-Host ''
+    Write-Host "This tool needs Google's free Android platform-tools (adb), and it isn't on this computer yet."
+    Write-Host 'It downloads from Google (a few MB). By downloading it you accept the Android SDK terms:'
+    Write-Host '  https://developer.android.com/studio/terms'
+    if (-not (Ask 'Download it now?')) { return $null }
+    $zip = Join-Path $env:TEMP 'platform-tools-latest-windows.zip'
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        # Windows PowerShell's progress bar makes downloads crawl.
+        $ProgressPreference = 'SilentlyContinue'
+        Write-Host 'Downloading...'
+        Invoke-WebRequest -Uri 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip' -OutFile $zip -UseBasicParsing
+        Expand-Archive -Path $zip -DestinationPath $PSScriptRoot -Force
+    } catch {
+        Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
+        return $null
+    } finally {
+        Remove-Item $zip -ErrorAction SilentlyContinue
+    }
+    $adb = Join-Path $PSScriptRoot 'platform-tools\adb.exe'
+    if (Test-Path $adb) { Write-Host 'Done.' -ForegroundColor Green; return $adb }
+    return $null
+}
+
 function Invoke-Adb([string[]]$AdbArgs) {
     (& $script:Adb $AdbArgs 2>&1 | ForEach-Object { "$_" }) -join "`n"
 }
@@ -331,6 +358,24 @@ function Uninstall-App {
     }
 }
 
+# Projectivy can't be shipped with this tool, so open its download page and
+# then install whatever the person downloads.
+function Get-Projectivy {
+    $ver = (Invoke-Shell 'getprop ro.build.version.release').Trim()
+    Write-Host ''
+    Write-Host "Your Fire Stick runs Android $ver. Opening Projectivy's download page in your browser..." -ForegroundColor Cyan
+    Start-Process 'https://www.apkmirror.com/apk/spocky/projectivy-launcher-android-tv/'
+    Write-Host '  1. Click the newest version.'
+    Write-Host "  2. In the Download table, pick a row whose minimum version is Android $ver or LOWER."
+    Write-Host '     Skip rows that need a newer Android (for example "Android 12L+").'
+    Write-Host '  3. Click "Download APK" under the app name (ignore the big ad buttons) and save it to Downloads.'
+    Read-Host 'Press Enter here once the download has finished'
+    Install-FromComputer
+    if ((Get-Installed) -contains 'com.spocky.projengmenu') {
+        Write-Host 'Next: open Projectivy once on the TV, then choose option 4 to make it your home screen.' -ForegroundColor Cyan
+    }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -345,6 +390,7 @@ Write-Host '     Fire Stick Cleanup'
 Write-Host '=============================='
 
 $Adb = Find-Adb
+if (-not $Adb) { $Adb = Get-PlatformTools }
 if (-not $Adb) {
     Write-Host "Couldn't find adb.exe. Put this file and Start-Here.bat inside the" -ForegroundColor Red
     Write-Host "'platform-tools' folder you downloaded (the one with adb.exe in it), then try again." -ForegroundColor Red
@@ -362,6 +408,7 @@ while ($true) {
     Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
     Write-Host '  5  Install an app file from this computer (.apk)'
     Write-Host '  6  Uninstall an app I installed'
+    Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
     Write-Host '  Q  Quit'
     switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
         '1' { Show-Preview }
@@ -370,6 +417,7 @@ while ($true) {
         '4' { Enable-Projectivy }
         '5' { Install-FromComputer }
         '6' { Uninstall-App }
+        '7' { Get-Projectivy }
         'Q' { return }
         default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
     }
