@@ -147,8 +147,11 @@ function Connect-Stick {
 
     Write-Host 'Connecting... (can take up to 30 seconds)'
     $r = Invoke-Adb @('connect', $script:Target)
-    # "failed to authenticate" is normal the first time: the TV is showing its permission popup.
-    if ($r -notmatch 'connected|authenticate') {
+    # Success is "connected to" or "already connected to"; "failed to authenticate
+    # to" is normal the first time (the TV is showing its permission popup).
+    # Match adb's wording at the start of a line: Windows' own timeout message
+    # ("...the connected party did not properly respond...") contains the word too.
+    if ($r -notmatch '(^|\n)\s*(already connected to|connected to|failed to authenticate to)') {
         Write-Host "Couldn't reach the Fire Stick. Check that:" -ForegroundColor Red
         Write-Host '  - the TV is on and the stick is on the same Wi-Fi as this computer'
         Write-Host '  - Settings > My Fire TV > Developer Options > ADB Debugging is ON'
@@ -477,6 +480,7 @@ function Open-Stick {
               ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
         Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
     }
+    Write-Host "Apps the tool has removed on this Fire Stick: $(@(Get-LocalList).Count)" -ForegroundColor DarkGray
     return $true
 }
 
