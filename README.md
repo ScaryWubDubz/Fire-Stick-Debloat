@@ -2,7 +2,7 @@
 
 Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you actually use, and switch to a clean, minimal home screen.
 
-**[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. It runs on Windows with a double-click. You don't need any technical knowledge, and nothing is permanent: every change can be undone from the same menu.
+**[⬇ Download](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. It runs on Windows with a double-click. You don't need any technical knowledge, and nothing is permanent: every change can be undone from the same menu.
 
 | Before: Amazon's home screen | After: clean Projectivy home screen |
 |---|---|
@@ -32,7 +32,7 @@ Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed
 
 Buying a stick for this? The Fire TV Stick 4K Max is the one it's tested on.
 
-If you try it on a version that isn't tested yet, please [report how it went](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
+If you try it on a version that isn't tested yet, please [report how it went](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/issues/new/choose).
 
 ## What you need
 
@@ -41,11 +41,11 @@ If you try it on a version that isn't tested yet, please [report how it went](ht
 
 ## 1. Download
 
-1. Click **[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. Your browser saves `Fire-Stick-Debloat-Windows.zip`, usually in your **Downloads** folder.
+1. Click **[⬇ Download](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. Your browser saves `Fire-Stick-Debloat-Windows.zip`, usually in your **Downloads** folder.
 2. Open File Explorer and click **Downloads** on the left. Right-click the zip, choose **Extract All…**, then click **Extract**.
 3. A new folder opens with **Start-Here.bat** inside. You'll use it in step 4.
 
-Release notes and older versions are on the [releases page](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases).
+Release notes and older versions are on the [releases page](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/releases).
 
 ## 2. Turn off ads in the Fire Stick's own settings
 
@@ -92,7 +92,7 @@ You don't need to look up the IP address: the tool finds the Fire Stick on your 
 
 After cleaning up, let the tool restart the Fire Stick.
 
-When a new version comes out, the tool tells you when it starts and offers to update itself. Your lists of removed apps are kept. Each run is also saved to the `logs` folder, which helps if you need to [report a problem](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
+When a new version comes out, the tool tells you when it starts and offers to update itself. Your lists of removed apps are kept. Each run is also saved to the `logs` folder, which helps if you need to [report a problem](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/issues/new/choose).
 
 The tool keeps a separate list of what it removed for each Fire Stick (`removed-<serial>.txt` next to `Start-Here.bat`), plus a backup copy on the stick itself. You can use one folder for several sticks, and if you move the folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
 
@@ -152,7 +152,7 @@ When you're done, you can turn **ADB Debugging** off again. You'll need it back 
 ## Mac and Linux
 
 > [!NOTE]
-> The Mac/Linux scripts haven't been tested on a real Fire Stick yet. Start with `--dry-run`, and please [report how it goes](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
+> The Mac/Linux scripts haven't been tested on a real Fire Stick yet. Start with `--dry-run`, and please [report how it goes](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/issues/new/choose).
 
 The [`mac-linux`](mac-linux) folder has `debloat.sh` and `restore.sh`. They cover the cleanup only (removing ads, tracking and unwanted apps) and need `adb` installed: `brew install android-platform-tools` on Mac, or `sudo apt install adb` on Linux. Run them from Terminal:
 
