@@ -1,0 +1,41 @@
+# When a release is published on GitHub, builds the download zip from that
+# release's tag and attaches it, so nobody has to build or upload it by hand.
+name: Release zip
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Build the zip
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          name="Fire-Stick-Debloat-${TAG}.zip"
+          mkdir -p out/Fire-Stick-Debloat
+          # git archive keeps the Windows line endings from .gitattributes.
+          git archive --format=tar HEAD Start-Here.bat FireStick.ps1 README.md LICENSE | tar -x -C out/Fire-Stick-Debloat
+          # Stamp the version so the tool can tell people when a newer one is out.
+          ps1=out/Fire-Stick-Debloat/FireStick.ps1
+          sed -i "s/^\$ToolVersion = 'dev'\r\$/\$ToolVersion = '${TAG}'\r/" "$ps1"
+          grep -q "^\$ToolVersion = '${TAG}'" "$ps1" || { echo "::error::couldn't stamp the version into FireStick.ps1"; exit 1; }
+          (cd out && zip -X -r "../$name" Fire-Stick-Debloat)
+          unzip -l "$name"
+          echo "ZIP=$name" >> "$GITHUB_ENV"
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "$ZIP" --clobber

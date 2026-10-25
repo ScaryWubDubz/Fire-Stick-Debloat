@@ -75,6 +75,8 @@ On the TV, go to **Settings → Preferences**:
 
 After cleaning up, let the tool restart the Fire Stick.
 
+When a new version comes out, the tool tells you when it starts and offers to update itself. Your lists of removed apps are kept. Each run is also saved to the `logs` folder, which helps if you need to [report a problem](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
+
 The tool keeps a separate list of what it removed for each Fire Stick (`removed-<serial>.txt` next to `Start-Here.bat`), plus a backup copy on the stick itself. You can use one folder for several sticks, and if you move the folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
 
 ## 5. Make the home screen clean
