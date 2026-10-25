@@ -7,7 +7,9 @@ $ErrorActionPreference = 'Continue'
 # here when it builds the zip. 'dev' means running from the source code, which
 # skips the update check.
 $ToolVersion = 'dev'
-$LatestReleaseApi = 'https://api.github.com/repos/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+# Updates are looked up by the repository's ID number, which stays the same if the
+# account or repo is renamed, so whoever takes an old name can't serve updates.
+$LatestReleaseApi = 'https://api.github.com/repositories/1431959561/releases/latest'
 $LogDir = Join-Path $PSScriptRoot 'logs'
 # What the tool removed is tracked per Fire Stick (by serial number), in this
 # folder and as a backup on the stick itself, so Undo and Re-apply keep working
@@ -762,7 +764,7 @@ function Test-ForUpdate {
     Write-Host "A newer version ($($latest.tag_name)) is available. You have $ToolVersion." -ForegroundColor Cyan
     $asset = $latest.assets | Where-Object { $_.name -like 'Fire-Stick-Debloat-*.zip' } | Select-Object -First 1
     if (-not $asset) {
-        Write-Host 'Download it from https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+        Write-Host 'Download it from https://github.com/ScaryWubDubz/Fire-Stick-Debloat/releases/latest'
         return
     }
     if (-not (Ask 'Update now? (your lists of removed apps are kept)')) { return }
@@ -788,7 +790,7 @@ function Test-ForUpdate {
         $script:Updated = $true
     } catch {
         Write-Host "The update didn't work: $($_.Exception.Message)" -ForegroundColor Red
-        Write-Host 'You can download it from https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+        Write-Host 'You can download it from https://github.com/ScaryWubDubz/Fire-Stick-Debloat/releases/latest'
     } finally {
         Remove-Item -LiteralPath $zip, $dir -Recurse -Force -ErrorAction SilentlyContinue
     }
