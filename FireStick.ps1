@@ -148,14 +148,106 @@ function Ask([string]$Question) {
     (Read-Host "$Question [y/N]").Trim() -match '^[Yy]'
 }
 
-function Connect-Stick {
-    Write-Host ''
-    Write-Host "Find your Fire Stick's IP address on the TV:"
-    Write-Host '  Settings > My Fire TV > About > Network   (it looks like 192.168.1.23)'
-    while ($true) {
-        $ip = (Read-Host 'Type the IP address and press Enter').Trim()
-        if ($ip -match '^\d{1,3}(\.\d{1,3}){3}$') { break }
-        Write-Host "That doesn't look like an IP address. Example: 192.168.1.23" -ForegroundColor Yellow
+# Looks on this computer's network for devices that accept ADB connections
+# (port 5555), so nobody has to look up the stick's IP address. Only the local
+# network is searched, and nothing is saved.
+function Find-Sticks {
+    $mine = @()
+    $targets = @()
+    foreach ($nic in [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+        # One adapter that can't be read shouldn't stop the search on the others.
+        try {
+            if ("$($nic.OperationalStatus)" -ne 'Up') { continue }
+            $props = $nic.GetIPProperties()
+            # Only networks with a router (home Wi-Fi or Ethernet), which skips virtual adapters.
+            $gateways = @($props.GatewayAddresses | Where-Object { "$($_.Address.AddressFamily)" -eq 'InterNetwork' -and "$($_.Address)" -ne '0.0.0.0' })
+            if ($gateways.Count -eq 0) { continue }
+            foreach ($a in $props.UnicastAddresses) {
+                $addr = "$($a.Address)"
+                if ($addr -notmatch '^(10\.\d+|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+$') { continue }
+                $mine += $addr
+                $b = $a.Address.GetAddressBytes(); [array]::Reverse($b)
+                $ipNum = [int64][BitConverter]::ToUInt32($b, 0)
+                $m = $a.IPv4Mask.GetAddressBytes(); [array]::Reverse($m)
+                $maskNum = [int64][BitConverter]::ToUInt32($m, 0)
+                # Search the whole network, which can be bigger than 254 addresses (mesh
+                # routers such as eero use 192.168.4.0 to 192.168.7.255), up to 1024.
+                if ($maskNum -gt 4294966272) { $size = 4294967296 - $maskNum } else { $size = 1024; $maskNum = 4294966272 }
+                $net = $ipNum -band $maskNum
+                for ($h = 1; $h -lt $size - 1; $h++) {
+                    $nb = [BitConverter]::GetBytes([uint32]($net + $h)); [array]::Reverse($nb)
+                    $targets += ([System.Net.IPAddress]::new($nb)).ToString()
+                }
+            }
+        } catch {
+            Write-Verbose "Skipped a network adapter: $_"
+        }
+    }
+    $targets = @($targets | Where-Object { $mine -notcontains $_ } | Select-Object -Unique)
+    if ($targets.Count -eq 0) { return @() }
+    Write-Host "  (searching $($targets[0]) to $($targets[-1]))" -ForegroundColor DarkGray
+    $found = @()
+    # 256 at a time, so the network isn't flooded. Devices on the same Wi-Fi
+    # answer well within the wait.
+    for ($start = 0; $start -lt $targets.Count; $start += 256) {
+        $probes = @()
+        foreach ($addr in $targets[$start..([Math]::Min($start + 255, $targets.Count - 1))]) {
+            try {
+                $client = New-Object System.Net.Sockets.TcpClient
+                $probes += [pscustomobject]@{ Ip = $addr; Client = $client; Task = $client.ConnectAsync($addr, 5555) }
+            } catch {
+                Write-Verbose "Couldn't check ${addr}: $_"
+            }
+        }
+        Start-Sleep -Milliseconds 1500
+        $found += @($probes | Where-Object { "$($_.Task.Status)" -eq 'RanToCompletion' } | ForEach-Object { $_.Ip })
+        foreach ($p in $probes) { $p.Client.Close() }
+    }
+    return $found
+}
+
+function Show-AdbSteps {
+    Write-Host 'Turn on ADB Debugging on the TV, using the remote:'
+    Write-Host '  1. Press Home. Go to the gear icon (Settings) at the right end of the menu and press the center button.'
+    Write-Host '  2. Open My Fire TV (called Device & Software on some models), then About.'
+    Write-Host '  3. The first line, with your Fire Stick name, is highlighted. Press the center button 7 times,'
+    Write-Host '     until it says "You are now a developer" or "No need, you are already a developer".'
+    Write-Host '  4. Press Back once, open Developer Options, and turn ADB Debugging ON.'
+    Write-Host 'Also check that the TV is on and the stick is on the same Wi-Fi as this computer.'
+}
+
+# Finds the Fire Stick on the network, or asks for its IP address, and
+# connects. $Skip leaves out the stick that's connected now (for Switch).
+function Connect-Stick([string]$Skip) {
+    $ip = $null
+    while (-not $ip) {
+        Write-Host ''
+        Write-Host 'Looking for your Fire Stick on this Wi-Fi... (a few seconds)'
+        $found = @(Find-Sticks | Where-Object { $_ -ne $Skip })
+        $answer = ''
+        if ($found.Count -eq 1) {
+            Write-Host "Found a Fire Stick at $($found[0])." -ForegroundColor Green
+            $answer = '1'
+        } elseif ($found.Count -gt 1) {
+            Write-Host 'Found more than one:'
+            for ($i = 0; $i -lt $found.Count; $i++) { Write-Host "  $($i + 1)  $($found[$i])" }
+            Write-Host "(Each stick's address is on its TV under Settings > My Fire TV > About > Network.)"
+            $answer = (Read-Host 'Type its number or IP address (Q to stop)').Trim()
+        } else {
+            Write-Host "Couldn't find a Fire Stick on this Wi-Fi." -ForegroundColor Yellow
+            Show-AdbSteps
+            Write-Host "If it still isn't found, type its IP address instead. It's on the TV under"
+            Write-Host '  Settings > My Fire TV > About > Network   (it looks like 192.168.1.23)'
+            $answer = (Read-Host 'Press Enter to search again, or type the IP address (Q to stop)').Trim()
+        }
+        if ($answer -match '^[Qq]$') { return $false }
+        if ($answer -match '^\d{1,2}$' -and [int]$answer -ge 1 -and [int]$answer -le $found.Count) {
+            $ip = $found[[int]$answer - 1]
+        } elseif ($answer -match '^\d{1,3}(\.\d{1,3}){3}$') {
+            $ip = $answer
+        } elseif ($answer) {
+            Write-Host "That doesn't look like an IP address. Example: 192.168.1.23" -ForegroundColor Yellow
+        }
     }
     $script:Target = "${ip}:5555"
 
@@ -166,20 +258,28 @@ function Connect-Stick {
     # Match adb's wording at the start of a line: Windows' own timeout message
     # ("...the connected party did not properly respond...") contains the word too.
     if ($r -notmatch '(^|\n)\s*(already connected to|connected to|failed to authenticate to)') {
-        Write-Host "Couldn't reach the Fire Stick. Check that:" -ForegroundColor Red
-        Write-Host '  - the TV is on and the stick is on the same Wi-Fi as this computer'
-        Write-Host '  - Settings > My Fire TV > Developer Options > ADB Debugging is ON'
-        Write-Host '  - the IP address is typed correctly'
+        Write-Host "Couldn't reach the Fire Stick at $ip." -ForegroundColor Red
+        Show-AdbSteps
+        Write-Host 'If you typed the IP address, check it on the TV: Settings > My Fire TV > About > Network.'
         return $false
     }
 
     # The first time, the TV asks for permission before anything works.
     for ($i = 0; $i -lt 45; $i++) {
         $state = Invoke-Adb @('-s', $script:Target, 'get-state')
-        if ($state -match '(^|\n)device') { Write-Host 'Connected!' -ForegroundColor Green; return $true }
+        if ($state -match '(^|\n)device') {
+            # The name shown in Settings > My Fire TV > About, to tell sticks apart.
+            $name = (Invoke-Shell 'settings get global device_name').Trim()
+            if (-not $name -or $name -eq 'null') { $name = 'the Fire Stick' }
+            $script:StickName = $name
+            Write-Host "Connected to $name!" -ForegroundColor Green
+            return $true
+        }
         if ($i -eq 0) {
             Write-Host ''
-            Write-Host 'LOOK AT YOUR TV: tick "Always allow from this computer", then select OK.' -ForegroundColor Cyan
+            Write-Host 'LOOK AT YOUR TV: a box asks "Allow USB debugging?". With the remote:' -ForegroundColor Cyan
+            Write-Host '  1. Use the arrows to highlight "Always allow from this computer" and press the center button to tick it.' -ForegroundColor Cyan
+            Write-Host '  2. Highlight OK and press the center button.' -ForegroundColor Cyan
         }
         if ($i -eq 15) {
             Invoke-Adb @('disconnect', $script:Target) | Out-Null
@@ -292,7 +392,7 @@ function Sync-RemovedList {
     return $all
 }
 
-function Start-Cleanup {
+function Start-Cleanup([switch]$NoRestart) {
     # Apps that are already off (from an earlier cleanup) are skipped.
     $active = Get-ActiveApps
     Write-Host ''
@@ -308,7 +408,7 @@ function Start-Cleanup {
         if (($active -contains $p) -and (Ask "Remove $(Get-Name $p)?")) { Disable-Pkg $p }
     }
     Sync-RemovedList | Out-Null
-    Restart-Prompt
+    if (-not $NoRestart) { Restart-Prompt }
 }
 
 function Start-Undo {
@@ -541,11 +641,51 @@ function Get-Projectivy {
     Write-Host "  2. In the Download table, pick a row whose minimum version is Android $ver or LOWER."
     Write-Host '     Skip rows that need a newer Android (for example "Android 12L+").'
     Write-Host '  3. Click "Download APK" under the app name (ignore the big ad buttons) and save it to Downloads.'
-    Read-Host 'Press Enter here once the download has finished'
+    $null = Read-Host 'Press Enter here once the download has finished'
     Install-FromComputer
-    if ((Get-Installed) -contains 'com.spocky.projengmenu') {
-        Write-Host 'Next: open Projectivy once on the TV, then choose option 4 to make it your home screen.' -ForegroundColor Cyan
+    return ((Get-Installed) -contains $ProjectivyPkg)
+}
+
+# Walks someone through the whole setup in order, for a first run.
+function Start-FirstTime {
+    Write-Host ''
+    Write-Host "Step 1 of 4: turn off ads in the Fire Stick's own settings" -ForegroundColor Cyan
+    Write-Host "The tool can't change these for you. On the TV, open Settings (the gear icon), then Preferences:"
+    Write-Host '  - Featured Content: turn off video autoplay, audio autoplay and sponsored content.'
+    Write-Host '  - Privacy Settings: turn off Device Usage Data, Collect App Usage Data and Interest-based Ads.'
+    $null = Read-Host 'Press Enter when you are done (or to skip this step)'
+
+    Write-Host ''
+    Write-Host "Step 2 of 4: remove ads, tracking and apps you don't use" -ForegroundColor Cyan
+    Show-Preview
+    if (Ask 'Start the cleanup now?') { Start-Cleanup -NoRestart }
+
+    Write-Host ''
+    Write-Host 'Step 3 of 4: install Projectivy, the clean home screen' -ForegroundColor Cyan
+    $hasProjectivy = (Get-Installed) -contains $ProjectivyPkg
+    if ($hasProjectivy) {
+        Write-Host 'Projectivy is already installed.'
+    } elseif (Ask 'Install Projectivy Launcher now? (recommended)') {
+        $hasProjectivy = Get-Projectivy
     }
+
+    Write-Host ''
+    Write-Host 'Step 4 of 4: make the Home button open Projectivy' -ForegroundColor Cyan
+    if ($hasProjectivy) {
+        # Projectivy finishes setting itself up the first time it's opened.
+        $r = Invoke-Shell "monkey -p $ProjectivyPkg -c android.intent.category.LEANBACK_LAUNCHER 1"
+        if ($r -match 'No activities') { Invoke-Shell "monkey -p $ProjectivyPkg -c android.intent.category.LAUNCHER 1" | Out-Null }
+        Write-Host "Projectivy should now be open on the TV. If it isn't, open it from Your Apps & Channels."
+        $null = Read-Host 'Go through its welcome screens, then press Enter here'
+        Enable-Projectivy
+        Write-Host ''
+        Write-Host 'To finish the look: in Projectivy, press Up to the top bar and open the gear icon. Hide the rows'
+        Write-Host "you don't need and pick a calm wallpaper. Step 5 of README.md has the details."
+    } else {
+        Write-Host "Skipped, because Projectivy isn't installed. You can do it later with options 7 and 4,"
+        Write-Host 'or make another launcher your home screen with option 4.'
+    }
+    Restart-Prompt
 }
 
 # After a Fire OS update: turns off again anything from the last cleanup that
@@ -574,8 +714,8 @@ function Start-Reapply {
 }
 
 # Connects to a stick and loads its own list of removed apps.
-function Open-Stick {
-    if (-not (Connect-Stick)) { return $false }
+function Open-Stick([string]$Skip) {
+    if (-not (Connect-Stick $Skip)) { return $false }
     Initialize-RemovedList
     $hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
     $localCount = @(Get-LocalList).Count
@@ -595,11 +735,13 @@ function Open-Stick {
 function Switch-Stick {
     $prevTarget = $script:Target
     $prevLog = $script:Log
-    if (Open-Stick) {
+    $prevName = $script:StickName
+    if (Open-Stick ($prevTarget -replace ':5555$', '')) {
         if ($prevTarget -ne $script:Target) { Invoke-Adb @('disconnect', $prevTarget) | Out-Null }
     } else {
         $script:Target = $prevTarget
         $script:Log = $prevLog
+        $script:StickName = $prevName
         Write-Host "Staying connected to the Fire Stick at $($prevTarget -replace ':5555$', '')." -ForegroundColor Yellow
     }
 }
@@ -712,8 +854,9 @@ try {
 
     while ($true) {
         Write-Host ''
-        Write-Host "Connected to the Fire Stick at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
+        Write-Host "Connected to $($script:StickName) at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
         Write-Host 'What do you want to do?'
+        Write-Host '  F  First time? Set everything up step by step'
         Write-Host '  1  Preview (shows what would happen, changes nothing)'
         Write-Host '  2  Clean up my Fire Stick'
         Write-Host '  3  Undo everything'
@@ -725,13 +868,18 @@ try {
         Write-Host '  S  Switch to another Fire Stick'
         Write-Host '  Q  Quit'
         switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
+            'F' { Start-FirstTime }
             '1' { Show-Preview }
             '2' { Start-Cleanup }
             '3' { Start-Undo }
             '4' { Select-HomeLauncher }
             '5' { Install-FromComputer }
             '6' { Uninstall-App }
-            '7' { Get-Projectivy }
+            '7' {
+                if (Get-Projectivy) {
+                    Write-Host 'Next: open Projectivy once on the TV, then choose option 4 to make it your home screen.' -ForegroundColor Cyan
+                }
+            }
             '8' { Start-Reapply }
             'S' { Switch-Stick }
             'Q' { return }
