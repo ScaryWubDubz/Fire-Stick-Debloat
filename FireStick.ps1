@@ -386,12 +386,14 @@ function Enable-HomeOnFire {
     Invoke-Shell "am start -n $HomeOnFirePkg/.MainActivity" | Out-Null
     Write-Host 'Home on Fire is now open on the TV: pick the launcher the Home button should open.' -ForegroundColor Cyan
     Write-Host '(If your launcher is not installed yet, install it first with option 5.)'
+    Write-Host "Tip: if Amazon's home screen keeps coming back, hold the remote's Menu button to open"
+    Write-Host "Home on Fire's settings and turn off its double-press escape to Amazon's home screen."
 }
 
 function Select-HomeLauncher {
     Write-Host ''
     Write-Host 'Which launcher should the Home button open?'
-    Write-Host '  1  Projectivy'
+    Write-Host '  1  Projectivy (recommended: the most reliable on Fire TV)'
     Write-Host '  2  Another launcher I installed (uses Home on Fire)'
     switch ((Read-Host 'Type 1 or 2').Trim()) {
         '1' { Enable-Projectivy }

@@ -15,7 +15,7 @@ Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you
 
 - **Removes ads and tracking:** sponsored home-screen ads, usage logging, crash reports sent to Amazon, Alexa shopping prompts, and the service that uploads your Wi-Fi passwords to Amazon.
 - **Lets you pick your apps:** it asks about each Amazon app (Prime Video, Freevee, Music…) and each app you installed. Keep what you use and drop the rest.
-- **Sets up a clean home screen:** it walks you through installing [Projectivy Launcher](https://www.apkmirror.com/apk/spocky/projectivy-launcher-android-tv/) and makes it open when you press Home. Prefer a different launcher? The Home button can open any launcher you install, using the free, open-source [Home on Fire](https://github.com/toolicious/home-on-fire) app.
+- **Sets up a clean home screen:** it walks you through installing [Projectivy Launcher](https://www.apkmirror.com/apk/spocky/projectivy-launcher-android-tv/) and makes it open when you press Home. Prefer a different launcher? The Home button can open any launcher you install, using the free, open-source [Home on Fire](https://github.com/toolicious/home-on-fire) app. Projectivy is still the most reliable choice.
 - **Never touches what keeps the stick working:** the system home screen, Appstore, settings, the remote and Alexa, and casting are on a protected list.
 
 ## Which Fire Sticks does it work on?
@@ -24,7 +24,7 @@ Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed
 
 | Fire OS | Android | What to expect |
 |---|---|---|
-| 8 | 11 | Tested with Projectivy. Everything works. Using another launcher through Home on Fire is new and not tested here yet. |
+| 8 | 11 | Tested. Everything works with Projectivy. Another launcher through Home on Fire also works, but Amazon's home screen came back more often in testing. |
 | 7 | 9 | Should work fully. It uses the same commands and the same Projectivy version as Fire OS 8, but hasn't been tested. With another launcher, Home can take a few seconds to open it (a Fire OS 7 limit). |
 | 6 | 7.1 | The cleanup, Undo and Re-apply should work. Making Home open Projectivy (option 4) may not: Amazon blocked custom home screens in some Fire OS 6 updates, so Projectivy might only open as a regular app. Home on Fire doesn't support Fire OS 6, so other launchers can't take over Home. Untested. |
 | 5 (Fire TV Stick 1st and 2nd gen) | 5.1 | The cleanup should work, but **Projectivy can't be installed**, because it needs Android 6 or newer, and Home on Fire doesn't support Fire OS 5. Undo may not bring back every app. Untested. |
@@ -66,7 +66,7 @@ On the TV, go to **Settings → Preferences**:
 | **1** Preview | Shows what would be removed. Changes nothing. Start here. |
 | **2** Clean up | Removes ads and tracking, then asks about each app. Type **y** to remove an app, or press Enter to keep it. |
 | **3** Undo everything | Brings back everything the tool removed. |
-| **4** Choose my home screen launcher | Makes the Home button open Projectivy, or any other launcher you've installed. For other launchers it installs Home on Fire for you. |
+| **4** Choose my home screen launcher | Makes the Home button open Projectivy (recommended), or any other launcher you've installed. For other launchers it installs Home on Fire for you. |
 | **5** Install an app file | Installs an `.apk` or `.apkm` from your Downloads folder onto the Fire Stick. |
 | **6** Uninstall an app | Completely removes an app you installed. |
 | **7** Get Projectivy Launcher | Opens Projectivy's download page, tells you which version fits your Fire Stick, then installs it. |
@@ -98,6 +98,8 @@ Any Android TV launcher can be your home screen:
 3. In Home on Fire, pick your launcher. It can also open your launcher automatically when the stick starts up.
 
 To go back to Projectivy, choose option **4**, then **1**. Only one of them controls the Home button at a time.
+
+In testing on a Fire TV Stick 4K Max, Home on Fire did open another launcher, but Amazon's home screen came back more often than with Projectivy, so Projectivy is still the recommended choice. If Amazon's screen keeps coming back, hold the remote's **☰ Menu** button to open Home on Fire's settings and try turning off its double-press escape to Amazon's home screen.
 
 ### Optional: Seeker TV
 
