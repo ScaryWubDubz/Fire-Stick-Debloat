@@ -4,6 +4,10 @@
 
 $ErrorActionPreference = 'Continue'
 $Log = Join-Path $PSScriptRoot 'disabled.txt'
+# A copy of that list also lives on the Fire Stick, so Undo and Re-apply keep
+# working after this folder is moved or the tool is run from another computer.
+$DeviceDir = '/sdcard/fire-stick-debloat'
+$DeviceLog = "$DeviceDir/disabled.txt"
 
 # Ads, tracking and background junk. Removed without asking.
 $AdsTelemetry = @(
@@ -206,6 +210,24 @@ function Show-Preview {
     Write-Host 'Nothing was changed.'
 }
 
+function Get-LocalList {
+    if (-not (Test-Path $Log)) { return @() }
+    @(Get-Content $Log | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+}
+
+# Merges the list on this computer with the copy on the Fire Stick, saves the
+# result to both, and returns it.
+function Sync-RemovedList {
+    $device = @((Invoke-Shell "cat $DeviceLog 2>/dev/null") -split "`n" |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z0-9_.]+$' })
+    $all = @(@(Get-LocalList) + $device | Sort-Object -Unique)
+    if ($all.Count -eq 0) { return @() }
+    Set-Content -Path $Log -Value $all
+    Invoke-Shell "mkdir -p $DeviceDir" | Out-Null
+    Invoke-Adb @('-s', $script:Target, 'push', $Log, $DeviceLog) | Out-Null
+    return $all
+}
+
 function Start-Cleanup {
     $installed = Get-Installed
     Write-Host ''
@@ -220,11 +242,12 @@ function Start-Cleanup {
     foreach ($p in Get-YourApps) {
         if (Ask "Remove $(Get-Name $p)?") { Disable-Pkg $p }
     }
+    Sync-RemovedList | Out-Null
     Restart-Prompt
 }
 
 function Start-Undo {
-    if (-not (Test-Path $Log)) { Write-Host 'Nothing to undo: no apps have been removed from this folder.'; return }
+    if (-not (Test-Path $Log)) { Write-Host 'Nothing to undo: the tool has no record of removing any apps.'; return }
     Write-Host ''
     Write-Host 'Bringing everything back...' -ForegroundColor Cyan
     foreach ($p in (Get-Content $Log | Where-Object { $_.Trim() } | Sort-Object -Unique)) {
@@ -233,6 +256,7 @@ function Start-Undo {
         Write-Host "  restored  $(Get-Name $p)" -ForegroundColor Green
     }
     Remove-Item $Log
+    Invoke-Shell "rm -f $DeviceLog" | Out-Null
     Restart-Prompt
 }
 
@@ -254,7 +278,9 @@ function Enable-Projectivy {
     }
     $current = (Invoke-Shell 'settings get secure enabled_accessibility_services').Trim()
     if ($current -like "*$svc*") {
-        Write-Host 'Projectivy already controls the Home button.' -ForegroundColor Green
+        # Updates can switch accessibility off as a whole while leaving the list alone.
+        Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
+        Write-Host 'Projectivy controls the Home button.' -ForegroundColor Green
         return
     }
     # Keep any accessibility services that were already on.
@@ -376,6 +402,32 @@ function Get-Projectivy {
     }
 }
 
+# After a Fire OS update: turns off again anything from the last cleanup that
+# the update switched back on, and gives Projectivy back the Home button.
+function Start-Reapply {
+    $list = @(Sync-RemovedList)
+    if ($list.Count -eq 0) {
+        Write-Host 'Nothing to re-apply yet. Run option 2 (Clean up) first.' -ForegroundColor Yellow
+        return
+    }
+    $installed = Get-Installed
+    $off = @((Invoke-Shell 'pm list packages -d') -split "`n" |
+        ForEach-Object { $_.Trim() -replace '^package:', '' } | Where-Object { $_ })
+    # Removed-for-this-user apps don't show as installed, so only installed
+    # apps that aren't disabled have come back.
+    $back = @($list | Where-Object { ($installed -contains $_) -and ($off -notcontains $_) })
+    Write-Host ''
+    if ($back.Count -eq 0) {
+        Write-Host "All $($list.Count) apps from your cleanup are still off." -ForegroundColor Green
+    } else {
+        Write-Host "$($back.Count) of $($list.Count) apps came back after the update. Turning them off again..." -ForegroundColor Cyan
+        foreach ($p in $back) { Disable-Pkg $p }
+        Sync-RemovedList | Out-Null
+    }
+    if ($installed -contains 'com.spocky.projengmenu') { Enable-Projectivy }
+    if ($back.Count -gt 0) { Restart-Prompt }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -399,6 +451,16 @@ if (-not $Adb) {
 }
 if (-not (Connect-Stick)) { return }
 
+$hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
+$localCount = @(Get-LocalList).Count
+$synced = @(Sync-RemovedList)
+if ($synced.Count -gt $localCount) {
+    Write-Host "Restored your list of removed apps from the Fire Stick's backup." -ForegroundColor Green
+} elseif ($synced.Count -gt 0 -and -not $hadDeviceCopy -and
+          ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
+    Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
+}
+
 while ($true) {
     Write-Host ''
     Write-Host 'What do you want to do?'
@@ -409,6 +471,7 @@ while ($true) {
     Write-Host '  5  Install an app file from this computer (.apk)'
     Write-Host '  6  Uninstall an app I installed'
     Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
+    Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
     Write-Host '  Q  Quit'
     switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
         '1' { Show-Preview }
@@ -418,6 +481,7 @@ while ($true) {
         '5' { Install-FromComputer }
         '6' { Uninstall-App }
         '7' { Get-Projectivy }
+        '8' { Start-Reapply }
         'Q' { return }
         default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
     }
