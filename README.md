@@ -101,6 +101,9 @@ When you're done, you can turn **ADB Debugging** off again. You'll need it back 
 
 ## Mac and Linux
 
+> [!NOTE]
+> The Mac/Linux scripts haven't been tested on a real Fire Stick yet. Start with `--dry-run`, and please [report how it goes](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
+
 The [`mac-linux`](mac-linux) folder has `debloat.sh` and `restore.sh`. They cover the cleanup only (removing ads, tracking and unwanted apps) and need `adb` installed: `brew install android-platform-tools` on Mac, or `sudo apt install adb` on Linux. Run them from Terminal:
 
 ```bash
