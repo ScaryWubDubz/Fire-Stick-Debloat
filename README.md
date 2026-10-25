@@ -2,7 +2,7 @@
 
 Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you actually use, and switch to a clean, minimal home screen.
 
-**[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest)**. It runs on Windows with a double-click. You don't need any technical knowledge, and nothing is permanent: every change can be undone from the same menu.
+**[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. It runs on Windows with a double-click. You don't need any technical knowledge, and nothing is permanent: every change can be undone from the same menu.
 
 | Before: Amazon's home screen | After: clean Projectivy home screen |
 |---|---|
@@ -28,6 +28,9 @@ Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed
 | 7 | 9 | Should work fully. It uses the same commands and the same Projectivy version as Fire OS 8, but hasn't been tested. With another launcher, Home can take a few seconds to open it (a Fire OS 7 limit). |
 | 6 | 7.1 | The cleanup, Undo and Re-apply should work. Making Home open Projectivy (option 4) may not: Amazon blocked custom home screens in some Fire OS 6 updates, so Projectivy might only open as a regular app. Home on Fire doesn't support Fire OS 6, so other launchers can't take over Home. Untested. |
 | 5 (Fire TV Stick 1st and 2nd gen) | 5.1 | The cleanup should work, but **Projectivy can't be installed**, because it needs Android 6 or newer, and Home on Fire doesn't support Fire OS 5. Undo may not bring back every app. Untested. |
+| Vega OS (Fire TV Stick 4K Select and other newer models) | none | Won't work. These sticks don't run Android apps and have no ADB Debugging setting. |
+
+Buying a stick for this? The Fire TV Stick 4K Max is the one it's tested on.
 
 If you try it on a version that isn't tested yet, please [report how it went](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/issues/new/choose).
 
@@ -38,31 +41,45 @@ If you try it on a version that isn't tested yet, please [report how it went](ht
 
 ## 1. Download
 
-**[⬇ Download the latest release](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest)**. Under **Assets**, click the `Fire-Stick-Debloat-….zip` file. Then right-click the downloaded zip and choose **Extract All**.
+1. Click **[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest/download/Fire-Stick-Debloat-Windows.zip)**. Your browser saves `Fire-Stick-Debloat-Windows.zip`, usually in your **Downloads** folder.
+2. Open File Explorer and click **Downloads** on the left. Right-click the zip, choose **Extract All…**, then click **Extract**.
+3. A new folder opens with **Start-Here.bat** inside. You'll use it in step 4.
+
+Release notes and older versions are on the [releases page](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases).
 
 ## 2. Turn off ads in the Fire Stick's own settings
 
-On the TV, go to **Settings → Preferences**:
+The tool can't change these for you, so do them on the TV with the remote:
 
-- **Featured Content:** turn off video autoplay, audio autoplay and sponsored content
-- **Privacy Settings:** turn off Device Usage Data, Collect App Usage Data and Interest-based Ads
+1. Press **Home**. Go to the **gear icon** (Settings) at the right end of the menu and press the center button.
+2. Open **Preferences**.
+3. Open **Featured Content** and turn off video autoplay, audio autoplay and sponsored content. Press **Back**.
+4. Open **Privacy Settings** and turn off **Device Usage Data**, **Collect App Usage Data** and **Interest-based Ads**.
 
 ## 3. Allow the computer to connect
 
-1. Go to **Settings → My Fire TV → About** and click your device's name **7 times** to turn on developer mode.
-2. Go back, open **Developer Options**, and turn on **ADB Debugging**.
-3. Go to **About → Network** and write down the **IP address**. It looks like `192.168.1.23`.
+On the TV, with the remote:
+
+1. Press **Home**. Go to the **gear icon** (Settings) and press the center button.
+2. Open **My Fire TV**. On some models it's called **Device & Software**.
+3. Open **About**. The first line, with your Fire Stick's name (for example "Fire TV Stick 4K Max"), is highlighted.
+4. Press the center button **7 times**. A message counts down at the bottom of the screen, then says "You are now a developer". If it says "No need, you are already a developer", that's fine too.
+5. Press **Back** once. **Developer Options** is now in the list. Open it.
+6. Turn on **ADB Debugging**. If a warning pops up, confirm it.
+
+You don't need to look up the IP address: the tool finds the Fire Stick on your Wi-Fi by itself. If it can't, the address is under **My Fire TV → About → Network** and looks like `192.168.1.23`.
 
 ## 4. Run the tool
 
-1. Double-click **Start-Here.bat**. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
-2. The first time, it offers to download Google's free Android platform-tools, which it needs to talk to the Fire Stick. Say **y**.
-3. Type your Fire Stick's IP address.
-4. **Look at the TV.** Tick **Always allow from this computer** and select **OK**.
-5. Pick an option:
+1. In the folder from step 1, double-click **Start-Here.bat**. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+2. The first time, it offers to download Google's free Android platform-tools, which it needs to talk to the Fire Stick. Type **y** and press Enter.
+3. It looks for your Fire Stick on your Wi-Fi, which takes a few seconds. It only looks on your home network and doesn't save anything. If it can't find the stick, it shows what to check, and you can type the IP address instead.
+4. **Look at the TV.** A box asks "Allow USB debugging?". Use the arrows on the remote to highlight **Always allow from this computer** and press the center button to tick it. Then highlight **OK** and press the center button.
+5. First time? Type **F**. The tool walks you through everything in order: the ad settings, the cleanup, Projectivy and the Home button. Or pick an option yourself:
 
 | Option | What it does |
 |---|---|
+| **F** First time? | Walks you through the whole setup, one step at a time. |
 | **1** Preview | Shows what would be removed. Changes nothing. Start here. |
 | **2** Clean up | Removes ads and tracking, then asks about each app. Type **y** to remove an app, or press Enter to keep it. |
 | **3** Undo everything | Brings back everything the tool removed. |
@@ -80,6 +97,8 @@ When a new version comes out, the tool tells you when it starts and offers to up
 The tool keeps a separate list of what it removed for each Fire Stick (`removed-<serial>.txt` next to `Start-Here.bat`), plus a backup copy on the stick itself. You can use one folder for several sticks, and if you move the folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
 
 ## 5. Make the home screen clean
+
+Option **F** does steps 1 and 2 below for you.
 
 1. Choose option **7** to install Projectivy, then open Projectivy once on the TV.
 2. Choose option **4**, then press **Home** on the remote. You should land on Projectivy.
@@ -117,7 +136,8 @@ In testing on a Fire TV Stick 4K Max, Home on Fire did open another launcher, bu
 
 | Problem | Fix |
 |---|---|
-| "Couldn't reach the Fire Stick" | Check that the TV is on, both devices are on the same Wi-Fi, ADB Debugging is on, and the IP address is right. |
+| The tool can't find or reach the Fire Stick | Check that the TV is on, both devices are on the same Wi-Fi, and ADB Debugging is on ([step 3](#3-allow-the-computer-to-connect)). If it still isn't found, type the IP address from **My Fire TV → About → Network**. |
+| A window says the files haven't been unzipped | Start-Here.bat was opened from inside the zip. Right-click the zip, choose **Extract All…**, and run Start-Here.bat from the new folder. |
 | Nothing happens after connecting | Look at the TV for the permission popup and select **OK**. |
 | `INSTALL_FAILED_OLDER_SDK` | That app version needs a newer Android than your Fire Stick has. Download a variant whose minimum version is your Android version or lower. |
 | A Fire OS update brought back ads, apps or Amazon's home screen | Run the tool and choose **8** (Re-apply my cleanup). |

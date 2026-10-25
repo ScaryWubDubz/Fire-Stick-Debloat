@@ -22,7 +22,11 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           set -euo pipefail
-          name="Fire-Stick-Debloat-${TAG}.zip"
+          # The same name every release, so .../releases/latest/download/<name>
+          # always downloads the newest zip (the README's Download button). It
+          # still matches 'Fire-Stick-Debloat-*.zip', which the update check
+          # in v1.4 looks for.
+          name="Fire-Stick-Debloat-Windows.zip"
           mkdir -p out/Fire-Stick-Debloat
           # git archive keeps the Windows line endings from .gitattributes.
           git archive --format=tar HEAD Start-Here.bat FireStick.ps1 README.md LICENSE | tar -x -C out/Fire-Stick-Debloat
