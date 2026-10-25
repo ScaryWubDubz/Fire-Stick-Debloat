@@ -18,7 +18,7 @@ Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you
 - **Sets up a clean home screen:** it walks you through installing [Projectivy Launcher](https://www.apkmirror.com/apk/spocky/projectivy-launcher-android-tv/) and makes it open when you press Home.
 - **Never touches what keeps the stick working:** the system home screen, Appstore, settings, the remote and Alexa, and casting are on a protected list.
 
-Tested on a Fire TV Stick running Fire OS 8 (Android 11). Other Fire TV devices should work, but they haven't been tried.
+Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed from the same copy of the tool. Other Fire TV devices should work, but they haven't been tried.
 
 ## What you need
 
