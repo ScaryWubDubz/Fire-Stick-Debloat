@@ -13,7 +13,7 @@ Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you
 
 ## What it does
 
-- **Removes ads and tracking:** sponsored home-screen ads, usage logging, crash reports sent to Amazon, Alexa shopping prompts, and the service that uploads your Wi-Fi passwords to Amazon.
+- **Removes ads and tracking:** Amazon's sponsored "special offers", usage logging, crash reports sent to Amazon, Alexa shopping prompts, and the service that uploads your Wi-Fi passwords to Amazon. Amazon's own home screen still shows its promoted rows if you open it: they're built into it, and removing it would break Settings and the Appstore. That's why the tool replaces it with Projectivy, so you don't land on it in normal use.
 - **Lets you pick your apps:** it asks about each Amazon app (Prime Video, Freevee, Music…) and each app you installed. Keep what you use and drop the rest.
 - **Sets up a clean home screen:** it walks you through installing [Projectivy Launcher](https://www.apkmirror.com/apk/spocky/projectivy-launcher-android-tv/) and makes it open when you press Home. Prefer a different launcher? The Home button can open any launcher you install, using the free, open-source [Home on Fire](https://github.com/toolicious/home-on-fire) app. Projectivy is still the most reliable choice.
 - **Never touches what keeps the stick working:** the system home screen, Appstore, settings, the remote and Alexa, and casting are on a protected list.
