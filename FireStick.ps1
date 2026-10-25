@@ -653,12 +653,15 @@ function Start-RunLog {
         Get-ChildItem -LiteralPath $LogDir -Filter 'run-*.txt' | Sort-Object Name -Descending |
             Select-Object -Skip 9 | Remove-Item -Force -ErrorAction SilentlyContinue
         Start-Transcript -LiteralPath (Join-Path $LogDir ('run-{0:yyyy-MM-dd_HH-mm-ss}.txt' -f (Get-Date))) | Out-Null
-    } catch { }
+    } catch {
+        # A log is nice to have; never let it stop the tool.
+        Write-Verbose "Couldn't start the log: $_"
+    }
 }
 
 function Stop-RunLog {
-    try { Stop-Transcript | Out-Null } catch { }
-    try { Clear-LogHeaders } catch { }
+    try { Stop-Transcript | Out-Null } catch { Write-Verbose "Couldn't stop the log: $_" }
+    try { Clear-LogHeaders } catch { Write-Verbose "Couldn't tidy the logs: $_" }
 }
 
 function Restart-Prompt {

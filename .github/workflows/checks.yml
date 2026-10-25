@@ -15,7 +15,7 @@ jobs:
     name: Windows tool
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: File format (ASCII text, Windows line endings)
         shell: pwsh
@@ -68,7 +68,7 @@ jobs:
     name: Mac/Linux scripts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Syntax and shellcheck errors
         run: |
           for f in mac-linux/*.sh; do bash -n "$f"; done
