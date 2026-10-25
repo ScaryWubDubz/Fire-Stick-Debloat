@@ -464,6 +464,36 @@ function Start-Reapply {
     if ($back.Count -gt 0) { Restart-Prompt }
 }
 
+# Connects to a stick and loads its own list of removed apps.
+function Open-Stick {
+    if (-not (Connect-Stick)) { return $false }
+    Initialize-RemovedList
+    $hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
+    $localCount = @(Get-LocalList).Count
+    $synced = @(Sync-RemovedList)
+    if ($synced.Count -gt $localCount) {
+        Write-Host "Restored your list of removed apps from the Fire Stick's backup." -ForegroundColor Green
+    } elseif ($synced.Count -gt 0 -and -not $hadDeviceCopy -and
+              ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
+        Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
+    }
+    return $true
+}
+
+# Moves to another Fire Stick without restarting the tool. If the new one
+# can't be reached, stays with the current one.
+function Switch-Stick {
+    $prevTarget = $script:Target
+    $prevLog = $script:Log
+    if (Open-Stick) {
+        if ($prevTarget -ne $script:Target) { Invoke-Adb @('disconnect', $prevTarget) | Out-Null }
+    } else {
+        $script:Target = $prevTarget
+        $script:Log = $prevLog
+        Write-Host "Staying connected to the Fire Stick at $($prevTarget -replace ':5555$', '')." -ForegroundColor Yellow
+    }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -485,21 +515,11 @@ if (-not $Adb) {
     Write-Host "If platform-tools is still a .zip file, right-click it and choose 'Extract All' first." -ForegroundColor Red
     return
 }
-if (-not (Connect-Stick)) { return }
-Initialize-RemovedList
-
-$hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
-$localCount = @(Get-LocalList).Count
-$synced = @(Sync-RemovedList)
-if ($synced.Count -gt $localCount) {
-    Write-Host "Restored your list of removed apps from the Fire Stick's backup." -ForegroundColor Green
-} elseif ($synced.Count -gt 0 -and -not $hadDeviceCopy -and
-          ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
-    Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
-}
+if (-not (Open-Stick)) { return }
 
 while ($true) {
     Write-Host ''
+    Write-Host "Connected to the Fire Stick at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
     Write-Host 'What do you want to do?'
     Write-Host '  1  Preview (shows what would happen, changes nothing)'
     Write-Host '  2  Clean up my Fire Stick'
@@ -509,8 +529,9 @@ while ($true) {
     Write-Host '  6  Uninstall an app I installed'
     Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
     Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
+    Write-Host '  S  Switch to another Fire Stick'
     Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
+    switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
@@ -519,7 +540,8 @@ while ($true) {
         '6' { Uninstall-App }
         '7' { Get-Projectivy }
         '8' { Start-Reapply }
+        'S' { Switch-Stick }
         'Q' { return }
-        default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
+        default { Write-Host 'Please type a number or letter from the list.' -ForegroundColor Yellow }
     }
 }

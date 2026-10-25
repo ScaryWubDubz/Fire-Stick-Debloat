@@ -60,6 +60,7 @@ On the TV, go to **Settings → Preferences**:
 | **6** Uninstall an app | Completely removes an app you installed. |
 | **7** Get Projectivy Launcher | Opens Projectivy's download page, tells you which version fits your Fire Stick, then installs it. |
 | **8** Re-apply my cleanup | After a Fire OS update: turns off anything from your cleanup that came back, and gives the Home button back to Projectivy. |
+| **S** Switch to another Fire Stick | Connects to a different stick without restarting the tool. Each stick keeps its own list of removed apps. |
 
 After cleaning up, let the tool restart the Fire Stick.
 
