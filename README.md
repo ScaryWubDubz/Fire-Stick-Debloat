@@ -63,7 +63,7 @@ On the TV, go to **Settings → Preferences**:
 
 After cleaning up, let the tool restart the Fire Stick.
 
-The tool keeps a list of what it removed in `disabled.txt` next to `Start-Here.bat`, plus a backup copy on the Fire Stick itself. If you move the tool's folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
+The tool keeps a separate list of what it removed for each Fire Stick (`removed-<serial>.txt` next to `Start-Here.bat`), plus a backup copy on the stick itself. You can use one folder for several sticks, and if you move the folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
 
 ## 5. Make the home screen clean
 
