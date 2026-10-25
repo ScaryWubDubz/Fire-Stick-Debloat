@@ -42,7 +42,7 @@ $Protected = @(
     'com.amazon.tv.launcher', 'com.amazon.venezia', 'com.amazon.tv.settings',
     'com.amazon.tv.settings.v2', 'com.amazon.vizzini', 'com.amazon.tcomm',
     'com.amazon.whisperplay', 'com.amazon.device.sync', 'com.android.systemui',
-    'com.spocky.projengmenu', 'com.esaba.downloader'
+    'com.spocky.projengmenu', 'com.esaba.downloader', 'io.github.toolicious.homeonfire'
 )
 
 $Names = @{
@@ -68,6 +68,8 @@ $Names = @{
     'org.xbmc.kodi'                     = 'Kodi'
     'com.spocky.projengmenu'            = 'Projectivy Launcher'
     'org.pegasus_frontend.android'      = 'Pegasus'
+    'io.github.toolicious.homeonfire'   = 'Home on Fire'
+    'com.seeker.tv'                     = 'Seeker TV'
 }
 
 function Get-Name([string]$Pkg) {
@@ -302,36 +304,115 @@ function Start-Undo {
 
 # Projectivy takes over the Home button through an accessibility service.
 # Fire OS often has no on-screen switch for it, so turn it on over ADB.
-function Enable-Projectivy {
-    $pkg = 'com.spocky.projengmenu'
-    if ((Get-Installed) -notcontains $pkg) {
-        Write-Host 'Projectivy Launcher is not installed yet. Install it on the Fire Stick, open it once, then try again.' -ForegroundColor Yellow
-        return
-    }
-    $dump = Invoke-Shell "dumpsys package $pkg"
-    $svc = $null
-    if ($dump -match 'android\.accessibilityservice\.AccessibilityService:\s*\n\s*\S+\s+(com\.spocky\.projengmenu/\S+)') { $svc = $Matches[1] }
-    elseif ($dump -match '(com\.spocky\.projengmenu/\S*[Aa]ccessib\S*)') { $svc = $Matches[1] }
-    if (-not $svc) {
-        Write-Host "Couldn't find Projectivy's Home button service. Use 'Override current launcher' in Projectivy's own settings instead." -ForegroundColor Yellow
-        return
-    }
+# Fire OS ignores the normal "default home app" setting, so the Home button is
+# taken over by an accessibility service that opens a launcher whenever
+# Amazon's home screen appears. Projectivy has its own; for any other launcher
+# the free, open-source Home on Fire app does it.
+$ProjectivyPkg = 'com.spocky.projengmenu'
+$HomeOnFirePkg = 'io.github.toolicious.homeonfire'
+$HomeOnFireApk = 'https://github.com/toolicious/home-on-fire/releases/latest/download/home-on-fire.apk'
+$HomeChoiceFile = "$DeviceDir/home.txt"
+
+function Get-AccessibilityService([string]$Pkg) {
+    $dump = Invoke-Shell "dumpsys package $Pkg"
+    $esc = [regex]::Escape($Pkg)
+    if ($dump -match "android\.accessibilityservice\.AccessibilityService:\s*\n\s*\S+\s+($esc/\S+)") { return $Matches[1] }
+    if ($dump -match "($esc/\S*[Aa]ccessib\S*)") { return $Matches[1] }
+    return $null
+}
+
+# Switches on one app's Home-button service and switches off the other's, so
+# the two never fight over Home. Other accessibility services are kept.
+# Remembers the choice on the stick so Re-apply can restore it.
+function Set-HomeService([string]$Pkg) {
+    $svc = Get-AccessibilityService $Pkg
+    if (-not $svc) { return $false }
     $current = (Invoke-Shell 'settings get secure enabled_accessibility_services').Trim()
-    if ($current -like "*$svc*") {
-        # Updates can switch accessibility off as a whole while leaving the list alone.
-        Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
-        Write-Host 'Projectivy controls the Home button.' -ForegroundColor Green
+    $keep = @()
+    if ($current -and $current -ne 'null') {
+        $keep = @($current -split ':' | Where-Object { $_ -and $_ -notlike "$ProjectivyPkg/*" -and $_ -notlike "$HomeOnFirePkg/*" })
+    }
+    $new = (@($keep) + $svc) -join ':'
+    Invoke-Shell "settings put secure enabled_accessibility_services '$new'" | Out-Null
+    Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
+    Invoke-Shell "mkdir -p $DeviceDir && echo $Pkg > $HomeChoiceFile" | Out-Null
+    return ((Invoke-Shell 'settings get secure enabled_accessibility_services') -like "*$svc*")
+}
+
+function Enable-Projectivy {
+    if ((Get-Installed) -notcontains $ProjectivyPkg) {
+        Write-Host 'Projectivy Launcher is not installed yet. Install it with option 7, open it once, then try again.' -ForegroundColor Yellow
         return
     }
-    # Keep any accessibility services that were already on.
-    if ($current -and $current -ne 'null') { $new = "${current}:$svc" } else { $new = $svc }
-    Invoke-Shell "settings put secure enabled_accessibility_services $new" | Out-Null
-    Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
-    if ((Invoke-Shell 'settings get secure enabled_accessibility_services') -like "*$svc*") {
+    if (Set-HomeService $ProjectivyPkg) {
         Write-Host 'Done! Press Home on your remote: you should land on Projectivy.' -ForegroundColor Green
-        Write-Host '(If a Fire OS update ever brings back the Amazon home screen, just run option 4 again.)'
+        Write-Host '(If a Fire OS update ever brings back the Amazon home screen, run option 8.)'
     } else {
         Write-Host "Fire OS didn't accept the change. Use 'Override current launcher' in Projectivy's own settings instead." -ForegroundColor Yellow
+    }
+}
+
+function Enable-HomeOnFire {
+    if ((Get-Installed) -notcontains $HomeOnFirePkg) {
+        Write-Host ''
+        Write-Host 'Any launcher can take over the Home button with Home on Fire, a free, open-source helper app'
+        Write-Host '(no internet access): https://github.com/toolicious/home-on-fire'
+        if (-not (Ask 'Download Home on Fire from GitHub and install it?')) { return }
+        $apk = Join-Path $env:TEMP 'home-on-fire.apk'
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $ProgressPreference = 'SilentlyContinue'
+            Write-Host 'Downloading...'
+            Invoke-WebRequest -Uri $HomeOnFireApk -OutFile $apk -UseBasicParsing
+        } catch {
+            Write-Host "Download failed: $($_.Exception.Message)" -ForegroundColor Red
+            return
+        }
+        $r = Invoke-Adb @('-s', $script:Target, 'install', '-r', $apk)
+        Remove-Item $apk -ErrorAction SilentlyContinue
+        if ($r -notmatch 'Success') {
+            Write-Host "Installing Home on Fire didn't work. Here's what the Fire Stick said:" -ForegroundColor Red
+            Write-Host $r
+            return
+        }
+    }
+    # Home on Fire's own setup needs this on Fire OS builds that hide the Accessibility page.
+    Invoke-Shell "pm grant $HomeOnFirePkg android.permission.WRITE_SECURE_SETTINGS" | Out-Null
+    if (Set-HomeService $HomeOnFirePkg) {
+        Write-Host 'Home on Fire now controls the Home button.' -ForegroundColor Green
+    } else {
+        Write-Host "Couldn't switch on Home on Fire's Home button service; finish its setup on the TV." -ForegroundColor Yellow
+    }
+    Invoke-Shell "am start -n $HomeOnFirePkg/.MainActivity" | Out-Null
+    Write-Host 'Home on Fire is now open on the TV: pick the launcher the Home button should open.' -ForegroundColor Cyan
+    Write-Host '(If your launcher is not installed yet, install it first with option 5.)'
+}
+
+function Select-HomeLauncher {
+    Write-Host ''
+    Write-Host 'Which launcher should the Home button open?'
+    Write-Host '  1  Projectivy'
+    Write-Host '  2  Another launcher I installed (uses Home on Fire)'
+    switch ((Read-Host 'Type 1 or 2').Trim()) {
+        '1' { Enable-Projectivy }
+        '2' { Enable-HomeOnFire }
+        default { Write-Host 'Nothing changed.' }
+    }
+}
+
+# Gives the Home button back to whichever app was chosen in option 4
+# (Projectivy if nothing was recorded, as before this choice existed).
+function Restore-HomeChoice {
+    $choice = (Invoke-Shell "cat $HomeChoiceFile 2>/dev/null").Trim()
+    if ($choice -ne $HomeOnFirePkg) { $choice = $ProjectivyPkg }
+    if ((Get-Installed) -notcontains $choice) { return }
+    if ($choice -eq $HomeOnFirePkg) {
+        Invoke-Shell "pm grant $HomeOnFirePkg android.permission.WRITE_SECURE_SETTINGS" | Out-Null
+    }
+    if (Set-HomeService $choice) {
+        Write-Host "$($Names[$choice]) controls the Home button." -ForegroundColor Green
+    } else {
+        Write-Host "Couldn't give $($Names[$choice]) the Home button back. Try option 4." -ForegroundColor Yellow
     }
 }
 
@@ -463,7 +544,7 @@ function Start-Reapply {
         foreach ($p in $back) { Disable-Pkg $p }
         Sync-RemovedList | Out-Null
     }
-    if ($installed -contains 'com.spocky.projengmenu') { Enable-Projectivy }
+    Restore-HomeChoice
     if ($back.Count -gt 0) { Restart-Prompt }
 }
 
@@ -528,7 +609,7 @@ while ($true) {
     Write-Host '  1  Preview (shows what would happen, changes nothing)'
     Write-Host '  2  Clean up my Fire Stick'
     Write-Host '  3  Undo everything'
-    Write-Host '  4  Make Projectivy my home screen (install Projectivy first)'
+    Write-Host '  4  Choose my home screen launcher (Projectivy or any other)'
     Write-Host '  5  Install an app file from this computer (.apk)'
     Write-Host '  6  Uninstall an app I installed'
     Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
@@ -539,7 +620,7 @@ while ($true) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
-        '4' { Enable-Projectivy }
+        '4' { Select-HomeLauncher }
         '5' { Install-FromComputer }
         '6' { Uninstall-App }
         '7' { Get-Projectivy }
