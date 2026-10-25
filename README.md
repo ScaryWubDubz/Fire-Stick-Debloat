@@ -4,6 +4,10 @@ Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you
 
 **[⬇ Download](https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest)**. It runs on Windows with a double-click. You don't need any technical knowledge, and nothing is permanent: every change can be undone from the same menu.
 
+| Before: Amazon's home screen | After: clean Projectivy home screen |
+|---|---|
+| ![Stock Fire TV home screen full of ads, autoplaying banners and sponsored rows](docs/before.jpg) | ![Clean home screen with a plain background and two rows of only the apps in use](docs/after.jpg) |
+
 > [!WARNING]
 > This is an unofficial community tool. It is not made by, affiliated with, or endorsed by Amazon. It changes system settings on your device, and you use it at your own risk. Apps are disabled, never deleted, and **Undo everything** brings them back. Still, if something goes wrong, a factory reset may be the only fix.
 
