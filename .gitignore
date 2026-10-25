@@ -1,0 +1,4 @@
+platform-tools/
+disabled.txt
+*.apk
+*.apkm
