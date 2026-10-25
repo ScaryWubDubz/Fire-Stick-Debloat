@@ -76,6 +76,12 @@ $Names = @{
     'org.pegasus_frontend.android'      = 'Pegasus'
     'io.github.toolicious.homeonfire'   = 'Home on Fire'
     'com.seeker.tv'                     = 'Seeker TV'
+    'ar.tvplayer.tv'                    = 'TiviMate'
+    'com.hbo.hbonow'                    = 'HBO Max'
+    'com.sling'                         = 'Sling TV'
+    'com.stremio.one'                   = 'Stremio'
+    'com.tiktok.tv'                     = 'TikTok'
+    'com.koushikdutta.cast.receiver'    = 'AllCast Receiver'
 }
 
 function Get-Name([string]$Pkg) {
@@ -214,17 +220,27 @@ function Disable-Pkg([string]$Pkg) {
     }
 }
 
+# Installed apps that aren't switched off yet: the ones a cleanup can still act
+# on. (Apps that are switched off still count as installed.)
+function Get-ActiveApps {
+    $off = @(Get-DisabledPackages)
+    @(Get-Installed | Where-Object { $off -notcontains $_ })
+}
+
 function Show-Preview {
-    $installed = Get-Installed
+    $active = Get-ActiveApps
+    $auto = @($AdsTelemetry | Where-Object { $active -contains $_ })
+    $asked = @(@($AmazonApps) + @(Get-YourApps) | Where-Object { $active -contains $_ })
     Write-Host ''
     Write-Host 'Removed automatically (ads and tracking):' -ForegroundColor Cyan
-    foreach ($p in $AdsTelemetry) { if ($installed -contains $p) { Write-Host "  $p" } }
+    foreach ($p in $auto) { Write-Host "  $p" }
+    if ($auto.Count -eq 0) { Write-Host '  (nothing left: these are already off)' }
     Write-Host ''
     Write-Host "You'll be asked about these (answer y only for ones you want gone):" -ForegroundColor Cyan
-    foreach ($p in $AmazonApps) { if ($installed -contains $p) { Write-Host "  $(Get-Name $p)" } }
-    foreach ($p in Get-YourApps) { Write-Host "  $(Get-Name $p)" }
+    foreach ($p in $asked) { Write-Host "  $(Get-Name $p)" }
+    if ($asked.Count -eq 0) { Write-Host '  (none)' }
     Write-Host ''
-    Write-Host 'Nothing was changed.'
+    Write-Host 'Apps that are already off are left out. Nothing was changed.'
 }
 
 function Get-DisabledPackages {
@@ -277,18 +293,19 @@ function Sync-RemovedList {
 }
 
 function Start-Cleanup {
-    $installed = Get-Installed
+    # Apps that are already off (from an earlier cleanup) are skipped.
+    $active = Get-ActiveApps
     Write-Host ''
     Write-Host 'Removing ads and tracking...' -ForegroundColor Cyan
-    foreach ($p in $AdsTelemetry) { if ($installed -contains $p) { Disable-Pkg $p } }
+    foreach ($p in $AdsTelemetry) { if ($active -contains $p) { Disable-Pkg $p } }
 
     Write-Host ''
     Write-Host 'Now each app. Type y and Enter to REMOVE it, or just press Enter to KEEP it.' -ForegroundColor Cyan
     foreach ($p in $AmazonApps) {
-        if (($installed -contains $p) -and (Ask "Remove $(Get-Name $p)?")) { Disable-Pkg $p }
+        if (($active -contains $p) -and (Ask "Remove $(Get-Name $p)?")) { Disable-Pkg $p }
     }
     foreach ($p in Get-YourApps) {
-        if (Ask "Remove $(Get-Name $p)?") { Disable-Pkg $p }
+        if (($active -contains $p) -and (Ask "Remove $(Get-Name $p)?")) { Disable-Pkg $p }
     }
     Sync-RemovedList | Out-Null
     Restart-Prompt
