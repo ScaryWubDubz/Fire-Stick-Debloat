@@ -92,6 +92,8 @@ On a Fire Stick it runs as an app; the Home button stays with Projectivy. **Don'
 | Nothing happens after connecting | Look at the TV for the permission popup and select **OK**. |
 | `INSTALL_FAILED_OLDER_SDK` | That app version needs a newer Android than your Fire Stick has. Download a variant whose minimum version is your Android version or lower. |
 | A Fire OS update brought Amazon's home screen back | Run the tool and choose **4** again. |
+| Amazon's home screen flashes, or comes back when you press Home quickly | This is normal on Fire TV. Amazon's home screen always gets the Home button first, and Projectivy jumps in front of it after a short delay that Fire OS adds. Press Home once and wait a second. If Amazon's screen stays, press Home once more. ([Projectivy issue #338](https://github.com/spocky/miproja1/issues/338)) |
+| "Android settings" in Projectivy only blinks | Fire TV's settings screen is built into Amazon's home screen, so Projectivy takes over again straight away. **Hold down the Home button** instead, then choose **Settings** from the menu that pops up. |
 | An app is listed as "couldn't remove" | Newer Fire OS protects some built-in apps. That's harmless. |
 | Something stopped working | Choose **3** (Undo everything) and restart the Fire Stick. |
 
