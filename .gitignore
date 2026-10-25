@@ -1,4 +1,6 @@
 platform-tools/
 disabled.txt
+disabled.txt.old
+removed-*.txt
 *.apk
 *.apkm

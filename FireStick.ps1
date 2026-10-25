@@ -3,11 +3,16 @@
 # disabled.txt so the "Undo" option can bring it all back.
 
 $ErrorActionPreference = 'Continue'
-$Log = Join-Path $PSScriptRoot 'disabled.txt'
-# A copy of that list also lives on the Fire Stick, so Undo and Re-apply keep
-# working after this folder is moved or the tool is run from another computer.
+# What the tool removed is tracked per Fire Stick (by serial number), in this
+# folder and as a backup on the stick itself, so Undo and Re-apply keep working
+# after this folder is moved or the tool is run from another computer.
+# $Log is set once a stick is connected.
+$Log = $null
 $DeviceDir = '/sdcard/fire-stick-debloat'
-$DeviceLog = "$DeviceDir/disabled.txt"
+$DeviceLog = "$DeviceDir/removed.txt"
+# Before v1.2 a single list was shared by every stick the tool connected to.
+$LegacyLog = Join-Path $PSScriptRoot 'disabled.txt'
+$LegacyDeviceLog = "$DeviceDir/disabled.txt"
 
 # Ads, tracking and background junk. Removed without asking.
 $AdsTelemetry = @(
@@ -142,8 +147,11 @@ function Connect-Stick {
 
     Write-Host 'Connecting... (can take up to 30 seconds)'
     $r = Invoke-Adb @('connect', $script:Target)
-    # "failed to authenticate" is normal the first time: the TV is showing its permission popup.
-    if ($r -notmatch 'connected|authenticate') {
+    # Success is "connected to" or "already connected to"; "failed to authenticate
+    # to" is normal the first time (the TV is showing its permission popup).
+    # Match adb's wording at the start of a line: Windows' own timeout message
+    # ("...the connected party did not properly respond...") contains the word too.
+    if ($r -notmatch '(^|\n)\s*(already connected to|connected to|failed to authenticate to)') {
         Write-Host "Couldn't reach the Fire Stick. Check that:" -ForegroundColor Red
         Write-Host '  - the TV is on and the stick is on the same Wi-Fi as this computer'
         Write-Host '  - Settings > My Fire TV > Developer Options > ADB Debugging is ON'
@@ -209,6 +217,37 @@ function Show-Preview {
     foreach ($p in Get-YourApps) { Write-Host "  $(Get-Name $p)" }
     Write-Host ''
     Write-Host 'Nothing was changed.'
+}
+
+function Get-DisabledPackages {
+    (Invoke-Shell 'pm list packages -d') -split "`n" |
+        ForEach-Object { $_.Trim() -replace '^package:', '' } | Where-Object { $_ }
+}
+
+# Points $Log at this stick's own list. The first time a stick is seen, any
+# shared list from before v1.2 is carried over, keeping only the apps that are
+# actually off on this stick, so another stick's choices don't leak in.
+function Initialize-RemovedList {
+    $id = (Invoke-Shell 'getprop ro.serialno').Trim() -replace '[^A-Za-z0-9]', ''
+    if (-not $id) { $id = (Invoke-Shell 'settings get secure android_id').Trim() -replace '[^A-Za-z0-9]', '' }
+    if (-not $id) { $id = 'unknown' }
+    $script:Log = Join-Path $PSScriptRoot "removed-$id.txt"
+
+    if ((Test-Path -LiteralPath $Log) -or ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) { return }
+    $old = @()
+    if (Test-Path -LiteralPath $LegacyLog) {
+        $old += @(Get-Content -LiteralPath $LegacyLog | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    }
+    $old += @((Invoke-Shell "cat $LegacyDeviceLog 2>/dev/null") -split "`n" |
+        ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z0-9_.]+$' })
+    if ($old.Count -eq 0) { return }
+    $installed = Get-Installed
+    $off = @(Get-DisabledPackages)
+    $mine = @($old | Sort-Object -Unique | Where-Object { -not (($installed -contains $_) -and ($off -notcontains $_)) })
+    if ($mine.Count -gt 0) { Set-Content -LiteralPath $Log -Value $mine }
+    Invoke-Shell "rm -f $LegacyDeviceLog" | Out-Null
+    if (Test-Path -LiteralPath $LegacyLog) { Move-Item -LiteralPath $LegacyLog -Destination "$LegacyLog.old" -Force }
+    Write-Host "Now keeping a separate list of removed apps for each Fire Stick ($($mine.Count) on this one)." -ForegroundColor Green
 }
 
 function Get-LocalList {
@@ -412,8 +451,7 @@ function Start-Reapply {
         return
     }
     $installed = Get-Installed
-    $off = @((Invoke-Shell 'pm list packages -d') -split "`n" |
-        ForEach-Object { $_.Trim() -replace '^package:', '' } | Where-Object { $_ })
+    $off = @(Get-DisabledPackages)
     # Removed-for-this-user apps don't show as installed, so only installed
     # apps that aren't disabled have come back.
     $back = @($list | Where-Object { ($installed -contains $_) -and ($off -notcontains $_) })
@@ -427,6 +465,37 @@ function Start-Reapply {
     }
     if ($installed -contains 'com.spocky.projengmenu') { Enable-Projectivy }
     if ($back.Count -gt 0) { Restart-Prompt }
+}
+
+# Connects to a stick and loads its own list of removed apps.
+function Open-Stick {
+    if (-not (Connect-Stick)) { return $false }
+    Initialize-RemovedList
+    $hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
+    $localCount = @(Get-LocalList).Count
+    $synced = @(Sync-RemovedList)
+    if ($synced.Count -gt $localCount) {
+        Write-Host "Restored your list of removed apps from the Fire Stick's backup." -ForegroundColor Green
+    } elseif ($synced.Count -gt 0 -and -not $hadDeviceCopy -and
+              ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
+        Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
+    }
+    Write-Host "Apps the tool has removed on this Fire Stick: $(@(Get-LocalList).Count)" -ForegroundColor DarkGray
+    return $true
+}
+
+# Moves to another Fire Stick without restarting the tool. If the new one
+# can't be reached, stays with the current one.
+function Switch-Stick {
+    $prevTarget = $script:Target
+    $prevLog = $script:Log
+    if (Open-Stick) {
+        if ($prevTarget -ne $script:Target) { Invoke-Adb @('disconnect', $prevTarget) | Out-Null }
+    } else {
+        $script:Target = $prevTarget
+        $script:Log = $prevLog
+        Write-Host "Staying connected to the Fire Stick at $($prevTarget -replace ':5555$', '')." -ForegroundColor Yellow
+    }
 }
 
 function Restart-Prompt {
@@ -450,20 +519,11 @@ if (-not $Adb) {
     Write-Host "If platform-tools is still a .zip file, right-click it and choose 'Extract All' first." -ForegroundColor Red
     return
 }
-if (-not (Connect-Stick)) { return }
-
-$hadDeviceCopy = (Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes'
-$localCount = @(Get-LocalList).Count
-$synced = @(Sync-RemovedList)
-if ($synced.Count -gt $localCount) {
-    Write-Host "Restored your list of removed apps from the Fire Stick's backup." -ForegroundColor Green
-} elseif ($synced.Count -gt 0 -and -not $hadDeviceCopy -and
-          ((Invoke-Shell "[ -f $DeviceLog ] && echo yes") -match 'yes')) {
-    Write-Host 'Backed up your list of removed apps to the Fire Stick.' -ForegroundColor Green
-}
+if (-not (Open-Stick)) { return }
 
 while ($true) {
     Write-Host ''
+    Write-Host "Connected to the Fire Stick at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
     Write-Host 'What do you want to do?'
     Write-Host '  1  Preview (shows what would happen, changes nothing)'
     Write-Host '  2  Clean up my Fire Stick'
@@ -473,8 +533,9 @@ while ($true) {
     Write-Host '  6  Uninstall an app I installed'
     Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
     Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
+    Write-Host '  S  Switch to another Fire Stick'
     Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type a number, or Q to quit').Trim().ToUpper()) {
+    switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
         '1' { Show-Preview }
         '2' { Start-Cleanup }
         '3' { Start-Undo }
@@ -483,7 +544,8 @@ while ($true) {
         '6' { Uninstall-App }
         '7' { Get-Projectivy }
         '8' { Start-Reapply }
+        'S' { Switch-Stick }
         'Q' { return }
-        default { Write-Host 'Please type a number from the list, or Q.' -ForegroundColor Yellow }
+        default { Write-Host 'Please type a number or letter from the list.' -ForegroundColor Yellow }
     }
 }
