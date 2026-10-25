@@ -59,8 +59,11 @@ On the TV, go to **Settings → Preferences**:
 | **5** Install an app file | Installs an `.apk` or `.apkm` from your Downloads folder onto the Fire Stick. |
 | **6** Uninstall an app | Completely removes an app you installed. |
 | **7** Get Projectivy Launcher | Opens Projectivy's download page, tells you which version fits your Fire Stick, then installs it. |
+| **8** Re-apply my cleanup | After a Fire OS update: turns off anything from your cleanup that came back, and gives the Home button back to Projectivy. |
 
 After cleaning up, let the tool restart the Fire Stick.
+
+The tool keeps a list of what it removed in `disabled.txt` next to `Start-Here.bat`, plus a backup copy on the Fire Stick itself. If you move the tool's folder or use another computer, **Undo** and **Re-apply** still know what to bring back or turn off.
 
 ## 5. Make the home screen clean
 
@@ -91,7 +94,7 @@ On a Fire Stick it runs as an app; the Home button stays with Projectivy. **Don'
 | "Couldn't reach the Fire Stick" | Check that the TV is on, both devices are on the same Wi-Fi, ADB Debugging is on, and the IP address is right. |
 | Nothing happens after connecting | Look at the TV for the permission popup and select **OK**. |
 | `INSTALL_FAILED_OLDER_SDK` | That app version needs a newer Android than your Fire Stick has. Download a variant whose minimum version is your Android version or lower. |
-| A Fire OS update brought Amazon's home screen back | Run the tool and choose **4** again. |
+| A Fire OS update brought back ads, apps or Amazon's home screen | Run the tool and choose **8** (Re-apply my cleanup). |
 | Amazon's home screen flashes, or comes back when you press Home quickly | This is normal on Fire TV. Amazon's home screen always gets the Home button first, and Projectivy jumps in front of it after a short delay that Fire OS adds. Press Home once and wait a second. If Amazon's screen stays, press Home once more. ([Projectivy issue #338](https://github.com/spocky/miproja1/issues/338)) |
 | "Android settings" in Projectivy only blinks | Fire TV's settings screen is built into Amazon's home screen, so Projectivy takes over again straight away. **Hold down the Home button** instead, then choose **Settings** from the menu that pops up. |
 | An app is listed as "couldn't remove" | Newer Fire OS protects some built-in apps. That's harmless. |
