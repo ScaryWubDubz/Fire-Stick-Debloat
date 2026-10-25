@@ -1,0 +1,79 @@
+name: Bug report
+description: Something didn't work while using the tool
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please check the [Troubleshooting](https://github.com/cmeraspro-dev/Fire-Stick-Debloat#troubleshooting) section first, since many common problems are covered there.
+
+        If something stopped working on your Fire Stick, run the tool and choose **3 (Undo everything)**, then restart the stick.
+
+  - type: dropdown
+    id: option
+    attributes:
+      label: What were you doing?
+      options:
+        - 1 - Preview
+        - 2 - Clean up
+        - 3 - Undo everything
+        - 4 - Make Projectivy my home screen
+        - 5 - Install an app file
+        - 6 - Uninstall an app
+        - 7 - Get Projectivy Launcher
+        - Starting the tool / connecting to the Fire Stick
+        - Downloading platform-tools
+        - Mac/Linux scripts
+        - Something else
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Fire TV model
+      description: "On the TV: Settings → My Fire TV → About. The model name is at the top."
+      placeholder: "e.g. Fire TV Stick 4K Max (2nd Gen)"
+    validations:
+      required: true
+
+  - type: input
+    id: fireos
+    attributes:
+      label: Fire OS version
+      description: "On the TV: Settings → My Fire TV → About → Software Version."
+      placeholder: "e.g. Fire OS 8.1.1.6 (PS7xxx/1234)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: computer
+    attributes:
+      label: Your computer
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Text from the tool's window
+      description: |
+        Copy everything from the black window and paste it here. To copy, drag over the text with your mouse and press **Enter**, or right-click the title bar → **Edit → Select All**, then press **Enter**.
+        You can replace your IP address with `x.x.x.x` if you like.
+      render: text
+    validations:
+      required: false
