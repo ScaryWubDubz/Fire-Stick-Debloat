@@ -152,10 +152,11 @@ function Ask([string]$Question) {
 # (port 5555), so nobody has to look up the stick's IP address. Only the local
 # network is searched, and nothing is saved.
 function Find-Sticks {
-    try {
-        $mine = @()
-        $prefixes = @()
-        foreach ($nic in [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+    $mine = @()
+    $targets = @()
+    foreach ($nic in [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) {
+        # One adapter that can't be read shouldn't stop the search on the others.
+        try {
             if ("$($nic.OperationalStatus)" -ne 'Up') { continue }
             $props = $nic.GetIPProperties()
             # Only networks with a router (home Wi-Fi or Ethernet), which skips virtual adapters.
@@ -165,28 +166,44 @@ function Find-Sticks {
                 $addr = "$($a.Address)"
                 if ($addr -notmatch '^(10\.\d+|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+$') { continue }
                 $mine += $addr
-                $prefixes += ($addr -replace '\.\d+$', '')
+                $b = $a.Address.GetAddressBytes(); [array]::Reverse($b)
+                $ipNum = [int64][BitConverter]::ToUInt32($b, 0)
+                $m = $a.IPv4Mask.GetAddressBytes(); [array]::Reverse($m)
+                $maskNum = [int64][BitConverter]::ToUInt32($m, 0)
+                # Search the whole network, which can be bigger than 254 addresses (mesh
+                # routers such as eero use 192.168.4.0 to 192.168.7.255), up to 1024.
+                if ($maskNum -gt 4294966272) { $size = 4294967296 - $maskNum } else { $size = 1024; $maskNum = 4294966272 }
+                $net = $ipNum -band $maskNum
+                for ($h = 1; $h -lt $size - 1; $h++) {
+                    $nb = [BitConverter]::GetBytes([uint32]($net + $h)); [array]::Reverse($nb)
+                    $targets += ([System.Net.IPAddress]::new($nb)).ToString()
+                }
             }
+        } catch {
+            Write-Verbose "Skipped a network adapter: $_"
         }
+    }
+    $targets = @($targets | Where-Object { $mine -notcontains $_ } | Select-Object -Unique)
+    if ($targets.Count -eq 0) { return @() }
+    Write-Host "  (searching $($targets[0]) to $($targets[-1]))" -ForegroundColor DarkGray
+    $found = @()
+    # 256 at a time, so the network isn't flooded. Devices on the same Wi-Fi
+    # answer well within the wait.
+    for ($start = 0; $start -lt $targets.Count; $start += 256) {
         $probes = @()
-        foreach ($prefix in @($prefixes | Sort-Object -Unique)) {
-            foreach ($n in 1..254) {
-                $addr = "$prefix.$n"
-                if ($mine -contains $addr) { continue }
+        foreach ($addr in $targets[$start..([Math]::Min($start + 255, $targets.Count - 1))]) {
+            try {
                 $client = New-Object System.Net.Sockets.TcpClient
                 $probes += [pscustomobject]@{ Ip = $addr; Client = $client; Task = $client.ConnectAsync($addr, 5555) }
+            } catch {
+                Write-Verbose "Couldn't check ${addr}: $_"
             }
         }
-        if ($probes.Count -eq 0) { return @() }
-        # Devices on the same Wi-Fi answer well within this.
-        Start-Sleep -Seconds 2
-        $found = @($probes | Where-Object { "$($_.Task.Status)" -eq 'RanToCompletion' } | ForEach-Object { $_.Ip })
+        Start-Sleep -Milliseconds 1500
+        $found += @($probes | Where-Object { "$($_.Task.Status)" -eq 'RanToCompletion' } | ForEach-Object { $_.Ip })
         foreach ($p in $probes) { $p.Client.Close() }
-        return $found
-    } catch {
-        Write-Verbose "Searching the network failed: $_"
-        return @()
     }
+    return $found
 }
 
 function Show-AdbSteps {
