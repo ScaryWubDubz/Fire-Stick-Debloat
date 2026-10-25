@@ -77,3 +77,13 @@ body:
       render: text
     validations:
       required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log file (optional)
+      description: |
+        The tool saves a log of each run in the `logs` folder next to `Start-Here.bat`. Drag the newest `run-….txt` file into this box.
+        Your Windows user name and computer name are removed from these logs automatically.
+    validations:
+      required: false

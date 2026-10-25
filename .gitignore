@@ -4,3 +4,4 @@ disabled.txt.old
 removed-*.txt
 *.apk
 *.apkm
+logs/

@@ -3,6 +3,12 @@
 # disabled.txt so the "Undo" option can bring it all back.
 
 $ErrorActionPreference = 'Continue'
+# The release workflow (.github/workflows/release.yml) stamps the release tag
+# here when it builds the zip. 'dev' means running from the source code, which
+# skips the update check.
+$ToolVersion = 'dev'
+$LatestReleaseApi = 'https://api.github.com/repos/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+$LogDir = Join-Path $PSScriptRoot 'logs'
 # What the tool removed is tracked per Fire Stick (by serial number), in this
 # folder and as a backup on the stick itself, so Undo and Re-apply keep working
 # after this folder is moved or the tool is run from another computer.
@@ -581,6 +587,80 @@ function Switch-Stick {
     }
 }
 
+# Tells people when a newer release is out and offers to update the tool's
+# files in place. The lists of removed apps and platform-tools are kept.
+function Test-ForUpdate {
+    if ($ToolVersion -eq 'dev') { return }
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $latest = Invoke-RestMethod -Uri $LatestReleaseApi -TimeoutSec 5 -Headers @{ 'User-Agent' = 'Fire-Stick-Debloat' }
+        $newer = [version]($latest.tag_name.TrimStart('v')) -gt [version]($ToolVersion.TrimStart('v'))
+    } catch {
+        return  # offline, or GitHub didn't answer: carry on with this version
+    }
+    if (-not $newer) { return }
+    Write-Host ''
+    Write-Host "A newer version ($($latest.tag_name)) is available. You have $ToolVersion." -ForegroundColor Cyan
+    $asset = $latest.assets | Where-Object { $_.name -like 'Fire-Stick-Debloat-*.zip' } | Select-Object -First 1
+    if (-not $asset) {
+        Write-Host 'Download it from https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+        return
+    }
+    if (-not (Ask 'Update now? (your lists of removed apps are kept)')) { return }
+    $zip = Join-Path $env:TEMP 'fire-stick-debloat-update.zip'
+    $dir = Join-Path $env:TEMP ('fire-stick-debloat-update-' + [guid]::NewGuid())
+    try {
+        $ProgressPreference = 'SilentlyContinue'
+        Write-Host 'Downloading...'
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zip -UseBasicParsing
+        Expand-Archive -Path $zip -DestinationPath $dir -Force
+        $new = Join-Path $dir 'Fire-Stick-Debloat'
+        foreach ($f in 'FireStick.ps1', 'README.md', 'LICENSE') {
+            $src = Join-Path $new $f
+            if (Test-Path -LiteralPath $src) { Copy-Item -LiteralPath $src -Destination (Join-Path $PSScriptRoot $f) -Force }
+        }
+        Write-Host "Updated to $($latest.tag_name). Close this window and double-click Start-Here.bat again." -ForegroundColor Green
+        # Start-Here.bat is the file running right now, so it can't be replaced safely.
+        $bat = Join-Path $new 'Start-Here.bat'
+        if ((Test-Path -LiteralPath $bat) -and
+            (Get-FileHash -LiteralPath $bat).Hash -ne (Get-FileHash -LiteralPath (Join-Path $PSScriptRoot 'Start-Here.bat')).Hash) {
+            Write-Host 'This update also changed Start-Here.bat. Copy it from the zip on the releases page.' -ForegroundColor Yellow
+        }
+        $script:Updated = $true
+    } catch {
+        Write-Host "The update didn't work: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host 'You can download it from https://github.com/cmeraspro-dev/Fire-Stick-Debloat/releases/latest'
+    } finally {
+        Remove-Item -LiteralPath $zip, $dir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# Each run is logged to logs\run-<date>.txt (the newest 10 are kept) so it can
+# be attached to a bug report. Windows puts the user and computer name at the
+# top of these logs; they're stripped out so the files are safe to share.
+function Clear-LogHeaders {
+    foreach ($f in @(Get-ChildItem -LiteralPath $LogDir -Filter 'run-*.txt' -ErrorAction SilentlyContinue)) {
+        $lines = @(Get-Content -LiteralPath $f.FullName)
+        $clean = @($lines | Where-Object { $_ -notmatch '^(Username|RunAs User|Machine|Host Application|Configuration Name|Process ID):' })
+        if ($clean.Count -ne $lines.Count) { Set-Content -LiteralPath $f.FullName -Value $clean }
+    }
+}
+
+function Start-RunLog {
+    try {
+        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+        Clear-LogHeaders
+        Get-ChildItem -LiteralPath $LogDir -Filter 'run-*.txt' | Sort-Object Name -Descending |
+            Select-Object -Skip 9 | Remove-Item -Force -ErrorAction SilentlyContinue
+        Start-Transcript -LiteralPath (Join-Path $LogDir ('run-{0:yyyy-MM-dd_HH-mm-ss}.txt' -f (Get-Date))) | Out-Null
+    } catch { }
+}
+
+function Stop-RunLog {
+    try { Stop-Transcript | Out-Null } catch { }
+    try { Clear-LogHeaders } catch { }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -590,45 +670,54 @@ function Restart-Prompt {
 }
 
 # --- main ---
-Write-Host '=============================='
-Write-Host '     Fire Stick Cleanup'
-Write-Host '=============================='
+Start-RunLog
+try {
+    Write-Host '=============================='
+    Write-Host '     Fire Stick Cleanup'
+    Write-Host '=============================='
+    if ($ToolVersion -ne 'dev') { Write-Host "Version $ToolVersion" -ForegroundColor DarkGray }
 
-$Adb = Find-Adb
-if (-not $Adb) { $Adb = Get-PlatformTools }
-if (-not $Adb) {
-    Write-Host "Couldn't find adb.exe. Put this file and Start-Here.bat inside the" -ForegroundColor Red
-    Write-Host "'platform-tools' folder you downloaded (the one with adb.exe in it), then try again." -ForegroundColor Red
-    Write-Host "If platform-tools is still a .zip file, right-click it and choose 'Extract All' first." -ForegroundColor Red
-    return
-}
-if (-not (Open-Stick)) { return }
+    Test-ForUpdate
+    if ($script:Updated) { return }
 
-while ($true) {
-    Write-Host ''
-    Write-Host "Connected to the Fire Stick at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
-    Write-Host 'What do you want to do?'
-    Write-Host '  1  Preview (shows what would happen, changes nothing)'
-    Write-Host '  2  Clean up my Fire Stick'
-    Write-Host '  3  Undo everything'
-    Write-Host '  4  Choose my home screen launcher (Projectivy or any other)'
-    Write-Host '  5  Install an app file from this computer (.apk)'
-    Write-Host '  6  Uninstall an app I installed'
-    Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
-    Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
-    Write-Host '  S  Switch to another Fire Stick'
-    Write-Host '  Q  Quit'
-    switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
-        '1' { Show-Preview }
-        '2' { Start-Cleanup }
-        '3' { Start-Undo }
-        '4' { Select-HomeLauncher }
-        '5' { Install-FromComputer }
-        '6' { Uninstall-App }
-        '7' { Get-Projectivy }
-        '8' { Start-Reapply }
-        'S' { Switch-Stick }
-        'Q' { return }
-        default { Write-Host 'Please type a number or letter from the list.' -ForegroundColor Yellow }
+    $Adb = Find-Adb
+    if (-not $Adb) { $Adb = Get-PlatformTools }
+    if (-not $Adb) {
+        Write-Host "Couldn't find adb.exe. Put this file and Start-Here.bat inside the" -ForegroundColor Red
+        Write-Host "'platform-tools' folder you downloaded (the one with adb.exe in it), then try again." -ForegroundColor Red
+        Write-Host "If platform-tools is still a .zip file, right-click it and choose 'Extract All' first." -ForegroundColor Red
+        return
     }
+    if (-not (Open-Stick)) { return }
+
+    while ($true) {
+        Write-Host ''
+        Write-Host "Connected to the Fire Stick at $($script:Target -replace ':5555$', '')" -ForegroundColor DarkGray
+        Write-Host 'What do you want to do?'
+        Write-Host '  1  Preview (shows what would happen, changes nothing)'
+        Write-Host '  2  Clean up my Fire Stick'
+        Write-Host '  3  Undo everything'
+        Write-Host '  4  Choose my home screen launcher (Projectivy or any other)'
+        Write-Host '  5  Install an app file from this computer (.apk)'
+        Write-Host '  6  Uninstall an app I installed'
+        Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
+        Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
+        Write-Host '  S  Switch to another Fire Stick'
+        Write-Host '  Q  Quit'
+        switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
+            '1' { Show-Preview }
+            '2' { Start-Cleanup }
+            '3' { Start-Undo }
+            '4' { Select-HomeLauncher }
+            '5' { Install-FromComputer }
+            '6' { Uninstall-App }
+            '7' { Get-Projectivy }
+            '8' { Start-Reapply }
+            'S' { Switch-Stick }
+            'Q' { return }
+            default { Write-Host 'Please type a number or letter from the list.' -ForegroundColor Yellow }
+        }
+    }
+} finally {
+    Stop-RunLog
 }

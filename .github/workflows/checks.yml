@@ -1,0 +1,75 @@
+# Runs on every pull request and every change to main, on a real Windows
+# machine, so mistakes in the tool are caught before anyone downloads it.
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-tool:
+    name: Windows tool
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: File format (ASCII text, Windows line endings)
+        shell: pwsh
+        run: |
+          # Windows PowerShell 5.1 misreads non-ASCII characters in .ps1 files,
+          # and cmd.exe can misread .bat files without CRLF line endings.
+          $bad = $false
+          foreach ($f in 'FireStick.ps1', 'Start-Here.bat') {
+            $bytes = [IO.File]::ReadAllBytes((Join-Path $PWD $f))
+            if (@($bytes | Where-Object { $_ -gt 127 }).Count) {
+              Write-Host "::error file=$f::contains non-ASCII characters"; $bad = $true
+            }
+            if ([Text.Encoding]::ASCII.GetString($bytes) -match '(?<!\r)\n') {
+              Write-Host "::error file=$f::has LF-only line endings (keep CRLF)"; $bad = $true
+            }
+          }
+          if ($bad) { exit 1 }
+
+      - name: Parse with Windows PowerShell 5.1 (what most people run)
+        shell: powershell
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'FireStick.ps1'), [ref]$null, [ref]$errors)
+          foreach ($e in $errors) { Write-Host "::error file=FireStick.ps1,line=$($e.Extent.StartLineNumber)::$($e.Message)" }
+          if ($errors) { exit 1 }
+          Write-Host "FireStick.ps1 parses cleanly in PowerShell $($PSVersionTable.PSVersion)"
+
+      - name: Parse with PowerShell 7
+        shell: pwsh
+        run: |
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'FireStick.ps1'), [ref]$null, [ref]$errors)
+          foreach ($e in $errors) { Write-Host "::error file=FireStick.ps1,line=$($e.Extent.StartLineNumber)::$($e.Message)" }
+          if ($errors) { exit 1 }
+          Write-Host "FireStick.ps1 parses cleanly in PowerShell $($PSVersionTable.PSVersion)"
+
+      - name: PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) { Install-Module PSScriptAnalyzer -Force -Scope CurrentUser }
+          # Style rules that don't fit an interactive console tool are left out.
+          $results = @(Invoke-ScriptAnalyzer -Path FireStick.ps1 -ExcludeRule PSAvoidUsingWriteHost, PSUseShouldProcessForStateChangingFunctions, PSUseSingularNouns, PSUseApprovedVerbs)
+          $results | Format-Table Severity, Line, RuleName, Message -AutoSize -Wrap | Out-String -Width 220 | Write-Host
+          # Only errors fail the check; warnings are listed above for reference.
+          $errors = @($results | Where-Object Severity -eq 'Error')
+          foreach ($e in $errors) { Write-Host "::error file=FireStick.ps1,line=$($e.Line)::$($e.RuleName): $($e.Message)" }
+          if ($errors.Count) { exit 1 }
+
+  shell-scripts:
+    name: Mac/Linux scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and shellcheck errors
+        run: |
+          for f in mac-linux/*.sh; do bash -n "$f"; done
+          shellcheck -S error mac-linux/*.sh
