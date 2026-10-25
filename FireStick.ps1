@@ -59,6 +59,7 @@ $Names = @{
     'com.plexapp.android'               = 'Plex'
     'tv.pluto.android'                  = 'Pluto TV'
     'com.tubitv'                        = 'Tubi'
+    'com.tubitv.ott'                    = 'Tubi'
     'org.xbmc.kodi'                     = 'Kodi'
     'com.spocky.projengmenu'            = 'Projectivy Launcher'
     'org.pegasus_frontend.android'      = 'Pegasus'
