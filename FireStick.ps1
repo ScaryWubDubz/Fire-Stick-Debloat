@@ -461,6 +461,17 @@ function Set-HomeService([string]$Pkg) {
     Invoke-Shell "settings put secure enabled_accessibility_services '$new'" | Out-Null
     Invoke-Shell 'settings put secure accessibility_enabled 1' | Out-Null
     Invoke-Shell "mkdir -p $DeviceDir && echo $Pkg > $HomeChoiceFile" | Out-Null
+    # Fire OS 8 can stop Projectivy from coming to the front after you leave an
+    # app, leaving Home on Amazon's screen. "Display over other apps" (which Fire
+    # OS has no settings page for) and a battery-optimisation exemption let it.
+    # Handed back when another launcher takes over Home.
+    if ($Pkg -eq $ProjectivyPkg) {
+        Invoke-Shell "appops set $ProjectivyPkg SYSTEM_ALERT_WINDOW allow" | Out-Null
+        Invoke-Shell "dumpsys deviceidle whitelist +$ProjectivyPkg" | Out-Null
+    } else {
+        Invoke-Shell "appops set $ProjectivyPkg SYSTEM_ALERT_WINDOW default" | Out-Null
+        Invoke-Shell "dumpsys deviceidle whitelist -$ProjectivyPkg" | Out-Null
+    }
     return ((Invoke-Shell 'settings get secure enabled_accessibility_services') -like "*$svc*")
 }
 
