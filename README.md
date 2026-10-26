@@ -151,6 +151,8 @@ When you're done, you can turn **ADB Debugging** off again. You'll need it back 
 
 ## Mac and Linux
 
+**Mac app (community-made):** monsieurfux built a Mac app based on this tool: [fire-stick-debloat-mac](https://github.com/monsieurfux/fire-stick-debloat-mac). They maintain it, not this project, and it isn't signed by Apple, so macOS asks you to confirm the first time you open it.
+
 > [!NOTE]
 > The Mac/Linux scripts haven't been tested on a real Fire Stick yet. Start with `--dry-run`, and please [report how it goes](https://github.com/ScaryWubDubz/Fire-Stick-Debloat/issues/new/choose).
 
