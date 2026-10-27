@@ -20,7 +20,7 @@ Remove Amazon's ads and tracking from your Fire TV Stick, keep only the apps you
 
 ## Which Fire Sticks does it work on?
 
-Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed from the same copy of the tool. To see your version on the TV, go to **Settings → My Fire TV → About → Software Version**.
+Tested on two Fire TV Stick 4K Max devices (Fire OS 8, Android 11), both managed from the same copy of the tool. A user has also confirmed it on a Fire TV Stick 4K (Fire OS 8). To see your version on the TV, go to **Settings → My Fire TV → About → Software Version**.
 
 | Fire OS | Android | What to expect |
 |---|---|---|
