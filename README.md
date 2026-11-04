@@ -88,6 +88,7 @@ You don't need to look up the IP address: the tool finds the Fire Stick on your 
 | **6** Uninstall an app | Completely removes an app you installed. |
 | **7** Get Projectivy Launcher | Opens Projectivy's download page, tells you which version fits your Fire Stick, then installs it. |
 | **8** Re-apply my cleanup | After a Fire OS update: turns off anything from your cleanup that came back, and gives the Home button back to your launcher. |
+| **9** Open Fire TV Settings | Opens the Fire TV settings screen on the TV, even when Projectivy or another launcher has the Home button. |
 | **S** Switch to another Fire Stick | Connects to a different stick without restarting the tool. Each stick keeps its own list of removed apps. |
 
 After cleaning up, let the tool restart the Fire Stick.
@@ -142,7 +143,8 @@ In testing on a Fire TV Stick 4K Max, Home on Fire did open another launcher, bu
 | `INSTALL_FAILED_OLDER_SDK` | That app version needs a newer Android than your Fire Stick has. Download a variant whose minimum version is your Android version or lower. |
 | A Fire OS update brought back ads, apps or Amazon's home screen | Run the tool and choose **8** (Re-apply my cleanup). |
 | Amazon's home screen flashes, or comes back when you press Home quickly | This is normal on Fire TV. Amazon's home screen always gets the Home button first, and Projectivy (or Home on Fire) jumps in front of it after a short delay that Fire OS adds. Press Home once and wait a second. If Amazon's screen stays, press Home once more. ([Projectivy issue #338](https://github.com/spocky/miproja1/issues/338)) |
-| "Android settings" in Projectivy only blinks | Fire TV's settings screen is built into Amazon's home screen, so Projectivy takes over again straight away. **Hold down the Home button** instead, then choose **Settings** from the menu that pops up. |
+| "Android settings" in Projectivy only blinks | Fire TV's settings screen is built into Amazon's home screen, so Projectivy takes over again straight away. Run the tool and choose **9** (Open Fire TV Settings), or **hold down the Home button** and choose **Settings** from the menu that pops up. |
+| No Settings in the hold-Home menu (Fire TV Edition TVs) | Those TVs only show quick toggles there. Run the tool and choose **9** (Open Fire TV Settings). |
 | You need Amazon's home screen while Home on Fire is in charge | **Hold down the Home button.** Home on Fire lets that through to Amazon's home screen, where Settings is too. |
 | An app is listed as "couldn't remove" | Newer Fire OS protects some built-in apps. That's harmless. |
 | Something stopped working | Choose **3** (Undo everything) and restart the Fire Stick. |
