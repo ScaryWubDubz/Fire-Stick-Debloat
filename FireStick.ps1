@@ -825,6 +825,19 @@ function Stop-RunLog {
     try { Clear-LogHeaders } catch { Write-Verbose "Couldn't tidy the logs: $_" }
 }
 
+# Opens Fire OS's own settings screen directly. The usual route goes through
+# Amazon's home screen, which Projectivy (or Home on Fire) replaces at once, so
+# Settings only blinks. Fire TV Edition TVs also have no Settings in the
+# hold-Home menu. Reported in issue #22.
+function Open-FireSettings {
+    $r = Invoke-Shell 'am start -n com.amazon.tv.launcher/.ui.MainSettingsActivity'
+    if ($r -match 'Error|does not exist|Exception') {
+        Write-Host "Couldn't open Settings on this device. Hold Home on the remote and choose Settings instead." -ForegroundColor Yellow
+    } else {
+        Write-Host 'Settings is now open on the TV.' -ForegroundColor Green
+    }
+}
+
 function Restart-Prompt {
     Write-Host ''
     if (Ask 'Done. Restart the Fire Stick now to finish?') {
@@ -867,6 +880,7 @@ try {
         Write-Host '  6  Uninstall an app I installed'
         Write-Host '  7  Get Projectivy Launcher (opens its download page, then installs it)'
         Write-Host '  8  Re-apply my cleanup (after a Fire OS update)'
+        Write-Host '  9  Open Fire TV Settings on the TV'
         Write-Host '  S  Switch to another Fire Stick'
         Write-Host '  Q  Quit'
         switch ((Read-Host 'Type a number or letter').Trim().ToUpper()) {
@@ -883,6 +897,7 @@ try {
                 }
             }
             '8' { Start-Reapply }
+            '9' { Open-FireSettings }
             'S' { Switch-Stick }
             'Q' { return }
             default { Write-Host 'Please type a number or letter from the list.' -ForegroundColor Yellow }
